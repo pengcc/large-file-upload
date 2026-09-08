@@ -1,0 +1,14 @@
+name: plan-with-context
+version: 0.1.1
+category: meta
+required: true
+invocation: user
+depends_on:
+  - project-memory
+  - grilling
+description: Create, revise, or review implementation plans through the Project Collaboration Planning contract with Codex context, Task State, output, and approval mechanics.
+triggers:
+  - implementation plan
+  - plan with context
+  - review proposed plan
+  - plan alignment review
