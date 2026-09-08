@@ -1,0 +1,13 @@
+name: implementation-review
+description: Review a complete delivered implementation or remediation against its Task Baseline, accepted Decisions, approved execution lineage, and exact current target.
+version: 0.1.0
+category: core
+required: true
+invocation: user
+depends_on:
+  - project-memory
+triggers:
+  - implementation review
+  - review complete implementation
+  - review delivered implementation
+  - remediation re-review
