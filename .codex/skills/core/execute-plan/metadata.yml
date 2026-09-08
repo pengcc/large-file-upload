@@ -1,0 +1,8 @@
+name: execute-plan
+version: 0.1.0
+category: core
+required: true
+invocation: user
+depends_on:
+  - project-memory
+description: Execute one current approved execution contract or direct bounded delivery request against applicable existing task authority and implementation truth with validation and drift STOP controls.
