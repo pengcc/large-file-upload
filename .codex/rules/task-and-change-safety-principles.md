@@ -124,15 +124,6 @@ Never treat the same Task Workspace path on another branch as canonical merely b
 exists there. If no non-disruptive branch-aware access path is available, stop rather than disturb
 unrelated work.
 
-When the current checkout is not the exact Task State branch, read canonical Task State through the
-exact branch/ref or remote source and perform authorized writes through an isolated branch-scoped
-mechanism available to the actor. This may use an isolated worktree, Git/ref-safe operation, or
-connector-backed branch mutation; it does not require introducing an automated worktree manager.
-
-Never treat the same Task Workspace path on another branch as canonical merely because that path
-exists there. If no non-disruptive branch-aware access path is available, stop rather than disturb
-unrelated work.
-
 Task-level contracts are the Task Baseline and, when needed, persisted Task Decisions. Resolve the
 Task Decisions category inside the canonical Task Workspace from:
 
