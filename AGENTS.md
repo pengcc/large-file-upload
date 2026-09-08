@@ -38,6 +38,14 @@ Do not import another project's Project Memory, product/domain code, project-spe
 
 Project-specific capabilities belong under `.codex/project-specific/` only when this repository develops a real need for them. Keep absent capabilities absent rather than adding placeholders.
 
+## Current Bootstrap Tooling State
+
+No application package manager, runtime, root validation command, PR publication helper, deployment workflow, or target-specific specialist is installed yet.
+
+Treat any `pnpm ...` command or source-project publication helper mentioned inside adopted shared workflow text as non-applicable source-era guidance, not current target truth. For repository-only bootstrap work, validate through Git/readback and file-boundary checks. Before product implementation, the target architecture/toolchain owner must establish target-owned validation commands and update Project Memory when they become durable facts.
+
+The source workflow's `publishable-change-handoff` reference is intentionally not installed because its current implementation assumes source-project package scripts. If a workflow reaches that handoff before a target-owned publication capability exists, report the capability as unavailable and stop or return the non-publication result truthfully; do not invent or run a substitute helper.
+
 ## Change and Safety
 
 Apply `.codex/rules/agent-operating-contract.md`, `.codex/rules/engineering-quality-principles.md`, `.codex/rules/task-and-change-safety-principles.md`, `.codex/rules/skill-invocation-and-dependency-boundaries.md`, and `.codex/rules/docs-first-policy.md` as applicable.
