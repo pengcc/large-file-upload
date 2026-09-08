@@ -1,0 +1,12 @@
+name: grilling
+description: Clarify broad, branching, decision-heavy, or Task-Baseline-blocking requirements when a user says “grill me” or an active workflow cannot safely continue.
+category: meta
+required: true
+invocation: model
+depends_on: []
+version: 0.1.1
+triggers:
+  - grill me
+  - clarify blocking requirements
+  - resolve branching scope ambiguity
+  - resolve Task Baseline blockers
