@@ -1,6 +1,6 @@
 # Issue #2 — Agent / Repository Publication Tooling Implementation Plan
 
-Execution Status: proposed / inactive
+Execution Status: approved / active
 
 Baseline: `baseline.md`
 Research: `repository-publication-research.md`
