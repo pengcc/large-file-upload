@@ -132,14 +132,16 @@ Do not add `.codex/config.toml` with an absolute external worktree path.
 
 Execution must use an already established safe feature checkout/worktree. The repository publication command validates the current repository/branch but does not create external worktrees. If later evidence requires Codex itself to create/manage external worktrees, handle that as a separate capability with local/per-machine permission ownership.
 
-### WI-7 — Update target-owned capability truth
+### WI-7 — Update current target-owned capability truth without pre-implementing Issue #1
 
-Update only the minimum durable context affected by the installed capability:
+Update only the current owners that already exist when this delivery runs:
 
-- `AGENTS.md` current tooling state / routing;
-- Project Memory owner selected by Issue #1's reviewed context design when that owner is available, or otherwise the current minimal core memory necessary to state that publication workflows/commands are now installed and application validation/runtime remain unset.
+- `AGENTS.md` for the installed publication/merge routing and removal of the bootstrap-era unavailable-capability statement; and
+- `.codex/project-memory/guideline.md` for the narrow current fact that target-owned Agent publication/merge workflows and direct-Node repository commands are installed, while application runtime/package-manager/validation/deployment choices remain unset.
 
-Do not prematurely implement the rest of Issue #1's context restructuring inside this delivery. If the Issue #1 target owner is not yet present, record only what is required for truthful current capability and let Issue #1 perform the later structural cleanup.
+Do **not** create the new Project Memory topics, project-specific guidance, collaboration README, or other context structure planned by Issue #1. After #2 is merged, Issue #1 will consume this new current tooling truth and perform its already-reviewed structural cleanup.
+
+Do not rewrite historical Project Decisions merely because the previously missing publication capability now exists unless implementation discovers a true decision conflict.
 
 ## Validation design
 
@@ -195,6 +197,8 @@ Hook:
 - verify both core skill metadata dependencies resolve;
 - verify the publishable-change handoff refers to the installed direct Node command surface rather than `pnpm` or source-project helpers;
 - verify `AGENTS.md` no longer claims the installed publication capability is absent;
+- verify `.codex/project-memory/guideline.md` states the new repository-tooling capability without selecting an application runtime/toolchain;
+- verify no Issue #1 context-structure files were created by this delivery;
 - verify no `.codex/config.toml`, `package.json`, lockfile, application validation command, deployment/release tooling, dirty-change helper, or automated worktree manager was added;
 - run `git diff --check` or equivalent whitespace validation.
 
@@ -207,7 +211,7 @@ Do not exercise a real push, PR creation, or merge merely as a test of the imple
 - A separately authorized exact PR can be merged through one maintained direct-Node command only after current mechanical readiness checks and expected-head protection, with truthful convergence on ambiguous effects.
 - Direct Codex `git push` / `gh pr create` / `gh pr merge` bypasses are blocked after the maintained path is installed.
 - No package manager, application runtime choice, app validation command, deployment/release tooling, machine-specific worktree root, or dirty-change recovery is introduced.
-- Current Project Memory / AGENTS truthfully states the newly installed publication capability while keeping application toolchain choices open.
+- Current `AGENTS.md` / Project Memory truthfully states the newly installed publication capability while keeping application toolchain choices open.
 
 ## Risks and rollback
 
