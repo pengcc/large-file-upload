@@ -14,7 +14,7 @@ The repository contains target-owned project context plus selectively adopted sh
 
 Target-owned Agent publication/merge workflows and dependency-free Node repository publication commands are installed under `.codex/skills/` and `.repo-tools/scripts/`. They provide clean feature-branch PR publication and separately authorized exact-PR merge with repository/head/readiness verification. Node is currently a repository-tooling dependency for this capability only; it is not an application-runtime decision.
 
-There is currently no application source tree, package manifest, lockfile, deployment workflow, backup tooling, automated worktree manager, or product-specific runtime tooling.
+There is currently no `.codex/project-specific/**` capability, application source tree, package manifest, lockfile, deployment workflow, backup tooling, automated worktree manager, or product-specific runtime tooling.
 
 ## Validation Boundary
 
