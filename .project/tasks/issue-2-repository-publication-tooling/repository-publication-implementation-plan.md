@@ -1,6 +1,7 @@
 # Issue #2 — Agent / Repository Publication Tooling Implementation Plan
 
-Execution Status: approved / active
+Execution Status: completed / inactive
+Terminal Delivery: PR #3 merged from head `f0bcecefbc27cedb5747d5f930df1e1be5e93264` as squash commit `ba9745cebd259bb607b03e9ae7b2c88ff2a0fcee` on 2026-09-09.
 
 Baseline: `baseline.md`
 Research: `repository-publication-research.md`
