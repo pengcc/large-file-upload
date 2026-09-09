@@ -12,8 +12,16 @@ async function readReady({ gh, repo, prNumber, defaultBranch, expectedHead = '' 
 
 async function observeMerged({ gh, repo, prNumber, expectedHead, attempts, intervalMs, sleep }) {
   let last = null;
+  let lastReadError = null;
   for (let i = 0; i < attempts; i += 1) {
-    last = await gh.viewPullRequest(repo, prNumber);
+    try {
+      last = await gh.viewPullRequest(repo, prNumber);
+      lastReadError = null;
+    } catch (error) {
+      lastReadError = error;
+      if (i + 1 < attempts) await sleep(intervalMs);
+      continue;
+    }
     if (last.state === 'MERGED' || last.mergedAt) {
       if (last.headRefOid !== expectedHead) {
         throw new RepositoryToolError('PR_HEAD_DRIFT', `Merged PR #${prNumber} reports an unexpected head.`);
@@ -22,6 +30,20 @@ async function observeMerged({ gh, repo, prNumber, expectedHead, attempts, inter
     }
     if (i + 1 < attempts) await sleep(intervalMs);
   }
+
+  if (lastReadError) {
+    throw new RepositoryToolError(
+      'MERGE_EFFECT_UNCERTAIN',
+      `Merge was attempted for PR #${prNumber}, but remote merged state could not be verified.`,
+      {
+        repository: repo,
+        prNumber,
+        headSha: expectedHead,
+        observationError: lastReadError?.code || lastReadError?.name || 'unknown',
+      }
+    );
+  }
+
   return last;
 }
 
