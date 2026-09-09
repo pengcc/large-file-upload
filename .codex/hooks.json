@@ -1,0 +1,18 @@
+{
+  "description": "Large File Upload repository publication guardrails",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/pre-tool-use.mjs\"",
+            "timeout": 120,
+            "statusMessage": "Checking repository publication boundary"
+          }
+        ]
+      }
+    ]
+  }
+}

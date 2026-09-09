@@ -1,0 +1,13 @@
+name: open-or-update-pr
+description: Push a clean committed feature branch and create or update its one pull request after explicit user authorization.
+version: 0.1.0
+category: core
+required: true
+invocation: user
+depends_on:
+  - project-memory
+triggers:
+  - open pull request
+  - create pull request
+  - update pull request
+  - push branch for review
