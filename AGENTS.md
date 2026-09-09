@@ -26,25 +26,34 @@ Use the installed workflow that matches the current task:
 - `plan-with-context` for implementation planning;
 - `execute-plan` for authorized execution;
 - `implementation-review` for complete implementation or remediation review;
+- `open-or-update-pr` for explicitly authorized push plus PR create/update of a clean committed feature branch;
+- `merge-pr` for separately authorized immediate merge of one exact PR;
 - `update-project-memory` only for confirmed durable target knowledge.
 
 Do not claim an optional or technology-specific capability exists unless it is installed. When a useful specialist is absent, use the router's missing-specialist fallback and `docs-first-research` where correctness depends on external technical facts.
 
 ## Target Boundaries
 
-The application technology stack is not selected by this bootstrap. Choose framework, runtime, persistence, storage, upload protocol, deployment, and repository tooling from this project's own requirements and verified technical evidence.
+The application technology stack is not selected by this bootstrap. Choose framework, runtime, persistence, storage, upload protocol, deployment, and application validation from this project's own requirements and verified technical evidence.
 
 Do not import another project's Project Memory, product/domain code, project-specific skills, runtime scripts, deployment/backup machinery, or environment assumptions unless a later target-owned decision and current consumer justify that exact capability.
 
 Project-specific capabilities belong under `.codex/project-specific/` only when this repository develops a real need for them. Keep absent capabilities absent rather than adding placeholders.
 
-## Current Bootstrap Tooling State
+## Current Tooling State
 
-No application package manager, runtime, root validation command, PR publication helper, deployment workflow, or target-specific specialist is installed yet.
+No application package manager, application runtime, root application validation command, deployment workflow, or target-specific specialist is installed yet.
 
-Treat any `pnpm ...` command or source-project publication helper mentioned inside adopted shared workflow text as non-applicable source-era guidance, not current target truth. For repository-only bootstrap work, validate through Git/readback and file-boundary checks. Before product implementation, the target architecture/toolchain owner must establish target-owned validation commands and update Project Memory when they become durable facts.
+Target-owned Agent publication/merge workflows and dependency-free Node repository publication commands are installed. They are repository tooling only and do not select the product application's runtime or package manager. Use:
 
-The source workflow's `publishable-change-handoff` reference is intentionally not installed because its current implementation assumes source-project package scripts. If a workflow reaches that handoff before a target-owned publication capability exists, report the capability as unavailable and stop or return the non-publication result truthfully; do not invent or run a substitute helper.
+```text
+node .repo-tools/scripts/repository-publication.mjs pr-open-or-update
+node .repo-tools/scripts/repository-publication.mjs pr-merge <PR>
+```
+
+The first command requires explicit push + PR authorization and a clean committed current feature branch. The second requires separate explicit authority for one exact PR. Codex publication hooks block direct `git push`, `gh pr create`, and `gh pr merge` bypasses once this maintained path is present.
+
+Treat any `pnpm ...` command or source-project publication helper mentioned inside adopted shared workflow text as non-applicable source-era guidance unless this repository later installs that exact command. For repository-only work, validate through the target-owned repository-tool tests plus Git/readback and file-boundary checks. Before product implementation, the target architecture/toolchain owner must establish target-owned application validation commands and update Project Memory when they become durable facts.
 
 ## Change and Safety
 

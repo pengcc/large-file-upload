@@ -1,0 +1,11 @@
+name: merge-pr
+description: Immediately merge one exact pull request after explicit user authorization, current-state readiness verification, and an operation-local expected-head guard.
+version: 0.1.0
+category: core
+required: true
+invocation: user
+depends_on:
+  - project-memory
+triggers:
+  - merge pull request
+  - merge PR
