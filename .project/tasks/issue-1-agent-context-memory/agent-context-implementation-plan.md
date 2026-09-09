@@ -54,13 +54,18 @@ Create exactly two initial current-fact topics:
 2. `.codex/project-memory/topics/repository-and-agent-tooling.md`
    - record the currently installed Agent/context capabilities;
    - record the intentional absence of `.repo-tools`, application validation, publication helpers, deployment/runtime tooling, and target-specific specialists beyond the new thin guidance;
-   - identify Issue #2 as future work for repository execution/publication tooling without treating that future design as current capability truth.
+   - describe only current capability truth; do not store future issue tracking or planned implementation details as Project Memory.
 
 Update `.codex/project-memory/topic-index.md` so each topic is read only for relevant tasks.
 
 Update `.codex/project-memory/guideline.md` narrowly so its project overview remains concise and it no longer states that all application architecture is open; retain the still-open technology/toolchain facts.
 
-Update `.codex/project-memory/decisions.md` only as needed to preserve the accepted architecture direction as a durable project decision and to clarify its relationship to the earlier bootstrap-era "keep technology choices open" decision. Do not rewrite historical decisions merely for wording consistency.
+Add a new durable project decision in `.codex/project-memory/decisions.md` for the accepted architecture direction. That decision must preserve the distinction between:
+
+- settled direction: browser-to-object-storage multipart transfer, stateless control plane, durable upload metadata, storage-side multipart assembly, and separate resume/content/storage-multipart identities; and
+- still-open implementation/technology choices: provider, runtime, framework, persistence technology, deployment topology, checksum mechanism, finalization convergence details, and dedupe/integrity verification model until their owning research settles them.
+
+Keep the earlier bootstrap-era decision about leaving technology choices open as historical context; do not rewrite it as if the later architecture direction had already existed at bootstrap time.
 
 Do not add a lesson unless implementation uncovers a genuinely reusable, verified lesson not already owned by the new topics or decisions.
 
@@ -82,6 +87,7 @@ Because no application toolchain exists, use repository/document validation only
 - A fresh agent is routed to a concise `large-file-upload`-specific guidance file only when project-specific guidance is relevant.
 - Project Memory exposes accepted upload architecture direction and current tooling capability state through indexed target-owned topics.
 - Core Project Memory no longer contradicts the accepted architecture direction while still truthfully leaving provider/runtime/framework/persistence/deployment and unresolved research choices open.
+- The accepted architecture direction has one durable Project Decision owner rather than being implied only by conversation or topic prose.
 - No execution/publication/runtime/deployment capability is introduced by this issue.
 
 ## Risks and rollback
