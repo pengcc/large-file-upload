@@ -8,23 +8,20 @@ The current repository is in project-bootstrap / architecture-research readiness
 
 ## Current Architecture and Tooling State
 
-Application architecture is partially settled rather than wholly open. The accepted upload direction is owned by `topics/architecture-and-upload-lifecycle.md` and Project Decision D-004. Provider, application runtime/framework, package manager, persistence technology, deployment platform/topology, checksum mechanism, and unresolved finalization/integrity details remain open until their owners settle them.
+Application architecture is partially settled rather than wholly open. Detailed current architecture/lifecycle facts and unresolved choices are owned by `topics/architecture-and-upload-lifecycle.md`; Project Decision D-004 owns the rationale for the accepted direction.
 
-The repository contains target-owned project context plus selectively adopted shared Agent/project workflow semantics. The target runtime must not depend on `pengcc/badminton-club-app` or another product repository.
+Current repository/Agent tooling capability facts are owned by `topics/repository-and-agent-tooling.md`.
 
-Repository/Agent tooling capability details are owned by `topics/repository-and-agent-tooling.md`. Target-owned publication/merge capability exists as repository tooling, while application runtime, application validation, deployment, and automated-worktree capabilities remain unset.
+Use `topic-index.md` to route subject-specific reads. This always-read core intentionally does not duplicate the mutable architecture or tooling fact lists owned by those topics.
 
 ## Validation Boundary
 
-Until target architecture and toolchain decisions establish application commands, do not infer or run `pnpm`, framework, persistence, or deployment validation from adopted shared workflow text. Repository/context changes use the installed direct Node repository-tool tests plus structural Git/readback and file-boundary checks as applicable; application validation remains unset.
-
-Before product implementation begins, the target's architecture/toolchain owner must establish the actual target-owned application validation commands and update Project Memory when those become durable current facts.
+Validation/toolchain current facts are routed through `topics/repository-and-agent-tooling.md`. Project Decision D-003 owns the durable validation-ownership and source-era-command boundary. Use those owners instead of inferring current commands or capabilities from adopted workflow text.
 
 ## Project Truth Boundaries
 
 - `docs/product-blueprint.md` is the current product/project blueprint for architecture research.
 - `.codex/project-memory/guideline.md` is the concise always-read current-fact core; `topic-index.md` routes subject-specific fact, decision, and lesson owners.
-- `.codex/project-collaboration/` provides reusable collaboration semantics and a local adoption entry map; it does not decide this product's architecture or technology stack.
-- `.codex/project-specific/agent-guidance.md` supplements `AGENTS.md` only for current target-specific boundaries and does not duplicate generic workflow mechanics.
+- `.codex/project-memory/decisions.md` owns durable decision rationale; `.codex/project-memory/lessons-learned.md` owns reusable lessons.
+- Repository workflow routing and target-specific guidance are owned by the current repository instructions and routed Agent/context owners rather than duplicated in Project Memory core prose.
 - Git history records provenance for shared files adopted from an exact source revision.
-- Missing optional or technology-specific skills remain absent until a real target consumer justifies them.
