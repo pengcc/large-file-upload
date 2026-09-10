@@ -8,25 +8,23 @@ The current repository is in project-bootstrap / architecture-research readiness
 
 ## Current Architecture and Tooling State
 
-Application architecture and technology choices remain target-owned. The repository currently has no selected application framework, application runtime, package manager, persistence technology, object-storage provider, deployment platform, or application validation command.
+Application architecture is partially settled rather than wholly open. The accepted upload direction is owned by `topics/architecture-and-upload-lifecycle.md` and Project Decision D-004. Provider, application runtime/framework, package manager, persistence technology, deployment platform/topology, checksum mechanism, and unresolved finalization/integrity details remain open until their owners settle them.
 
 The repository contains target-owned project context plus selectively adopted shared Agent/project workflow semantics. The target runtime must not depend on `pengcc/badminton-club-app` or another product repository.
 
-Target-owned Agent publication/merge workflows and dependency-free Node repository publication commands are installed under `.codex/skills/` and `.repo-tools/scripts/`. They provide clean feature-branch PR publication and separately authorized exact-PR merge with repository/head/readiness verification. Node is currently a repository-tooling dependency for this capability only; it is not an application-runtime decision.
-
-There is currently no `.codex/project-specific/**` capability, application source tree, package manifest, lockfile, deployment workflow, backup tooling, automated worktree manager, or product-specific runtime tooling.
+Repository/Agent tooling capability details are owned by `topics/repository-and-agent-tooling.md`. Target-owned publication/merge capability exists as repository tooling, while application runtime, application validation, deployment, and automated-worktree capabilities remain unset.
 
 ## Validation Boundary
 
-Until target architecture and toolchain decisions establish application commands, do not infer or run `pnpm`, framework, persistence, or deployment validation from adopted shared workflow text. Repository publication tooling is validated with direct Node tests, structural/readback checks, and read-only GitHub capability evidence; application validation remains unset.
+Until target architecture and toolchain decisions establish application commands, do not infer or run `pnpm`, framework, persistence, or deployment validation from adopted shared workflow text. Repository/context changes use the installed direct Node repository-tool tests plus structural Git/readback and file-boundary checks as applicable; application validation remains unset.
 
 Before product implementation begins, the target's architecture/toolchain owner must establish the actual target-owned application validation commands and update Project Memory when those become durable current facts.
 
 ## Project Truth Boundaries
 
 - `docs/product-blueprint.md` is the current product/project blueprint for architecture research.
-- `.codex/project-memory/guideline.md` and routed Project Memory owners hold durable target facts and decisions.
-- `.codex/project-collaboration/` and selected `.codex/rules/` / `.codex/skills/` provide reusable workflow semantics; they do not decide this product's technology stack.
-- `.repo-tools/scripts/repository-publication.mjs` is the maintained repository publication/merge mechanical owner; Agent workflows retain intent and authorization boundaries.
+- `.codex/project-memory/guideline.md` is the concise always-read current-fact core; `topic-index.md` routes subject-specific fact, decision, and lesson owners.
+- `.codex/project-collaboration/` provides reusable collaboration semantics and a local adoption entry map; it does not decide this product's architecture or technology stack.
+- `.codex/project-specific/agent-guidance.md` supplements `AGENTS.md` only for current target-specific boundaries and does not duplicate generic workflow mechanics.
 - Git history records provenance for shared files adopted from an exact source revision.
 - Missing optional or technology-specific skills remain absent until a real target consumer justifies them.

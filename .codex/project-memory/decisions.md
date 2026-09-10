@@ -22,10 +22,20 @@
 
 ## D-003 Validation remains target-owned and currently unset
 
-**Context:** Some adopted shared workflow text contains example or source-era application validation/publication commands, while this repository currently has no selected package manager or application toolchain.
+**Context:** Some adopted shared workflow text contains example or source-era application validation/publication commands, while this repository currently has no selected package manager or application toolchain. Target-owned repository publication/merge commands now exist separately from the application toolchain.
 
 **Decision:** No application validation command or package-manager command is current project truth yet. In particular, do not infer that `pnpm validate`, persistence-test commands, or source-project publication helpers apply here merely because adopted shared workflow text mentions them.
 
 **Reason:** Validation and publication mechanics must be owned by the actual target toolchain and repository once those capabilities exist.
 
-**Impact:** Bootstrap-only changes use structural Git/readback validation. Before product implementation, architecture/toolchain work must establish target-owned validation commands and update Project Memory if they become durable facts. Missing publication/PR helper capability must degrade or stop truthfully rather than emit a source-project command.
+**Impact:** Repository/context changes use structural Git/readback checks and the installed repository-tool tests as applicable. Before product implementation, architecture/toolchain work must establish target-owned application validation commands and update Project Memory if they become durable facts. Authorized publication/merge uses the installed target-owned workflow and repository command owner; source-project publication helpers remain non-applicable.
+
+## D-004 Use browser-to-object-storage multipart with a stateless control plane
+
+**Context:** The product must reliably transfer files larger than 10 GB across unreliable networks, resume without unnecessary retransmission, remain correct across service restarts and multiple instances, and separate transfer progress from trustworthy final completion. The architecture direction was narrowed without selecting a provider or application technology stack.
+
+**Decision:** Use browser-to-object-storage multipart transfer as the large-file data plane. Keep application control-plane instances stateless with respect to in-process upload ownership while persisting durable upload metadata outside process memory. Let object storage perform multipart assembly/final object construction. Treat resume/session identity, verified content identity, and storage-provider multipart identity as distinct concepts.
+
+**Reason:** This keeps large payloads out of the application control plane, avoids instance-local upload ownership, uses storage-native multipart assembly, and prevents different recovery/integrity/storage identities from being conflated as the system evolves.
+
+**Impact:** Provider, application runtime/framework, persistence technology, deployment topology, checksum mechanism, finalization convergence details, and the dedupe/whole-file-integrity verification model remain open until their owning research settles them. Later implementation planning must preserve the accepted direction unless changed evidence or explicit user correction returns it to the architecture owner.
