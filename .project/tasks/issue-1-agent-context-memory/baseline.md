@@ -27,7 +27,7 @@ The repository has a clear, durable, target-owned context boundary that distingu
 - Shared workflow semantics may be reused, but another product repository must not become a runtime or project-truth dependency.
 - The already accepted upload architecture direction remains input evidence; this task organizes durable context and must not silently redesign it.
 - Architecture/provider/checksum facts that materially affect product correctness remain subject to the existing docs-first research boundary rather than being asserted from source-project precedent.
-- Current absence of application/runtime/publication tooling is truthful project state and must not be obscured by copied placeholders.
+- Target-owned repository publication/merge tooling now exists; application runtime, application validation, deployment, package-manager, worktree automation, and product-specific runtime tooling remain absent unless independently established by their owners.
 
 ## Value and Risk
 The value is lower repeated-context cost, less source-project leakage, and clearer ownership before implementation begins. The main risk is overbuilding project-specific Agent infrastructure or freezing research-stage assumptions as permanent truth. Control should therefore remain narrow, evidence-backed, and reversible.
