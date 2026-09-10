@@ -1,6 +1,6 @@
 # Issue #1 — Agent Context and Project Memory Implementation Plan
 
-Execution Status: proposed / inactive
+Execution Status: approved / active
 
 Baseline: `baseline.md`
 Applicable accepted Task Decisions: none separately persisted for this task.
