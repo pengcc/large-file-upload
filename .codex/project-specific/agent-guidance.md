@@ -4,14 +4,9 @@ This file supplements `AGENTS.md` with the small set of `large-file-upload`-spec
 
 ## Accepted architecture direction
 
-Preserve the current accepted upload direction unless changed evidence or explicit user correction returns the question to its architecture owner:
+Preserve the accepted upload direction recorded in `.codex/project-memory/topics/architecture-and-upload-lifecycle.md` and Project Decision D-004. Those Project Memory owners, not this supplement, are authoritative for the current architecture facts and their rationale.
 
-- browser-to-object-storage multipart transfer is the data plane;
-- the control plane is stateless at the service-instance/process boundary while durable upload metadata lives outside process memory;
-- multipart assembly/final object construction is storage-side;
-- resume identity, verified content identity, and storage-provider multipart identity are distinct concepts.
-
-The detailed current-fact owner is `.codex/project-memory/topics/architecture-and-upload-lifecycle.md`; durable rationale is recorded in Project Decision D-004. Do not silently turn this direction into a provider, framework, database, checksum, finalization, or dedupe choice.
+When a task would change the accepted data/control-plane direction, storage-side assembly boundary, or identity separation, read those owners and return the question to the architecture owner if changed evidence or explicit user correction warrants reconsideration. Do not silently turn the accepted direction into a provider, framework, database, checksum, finalization, or dedupe choice.
 
 ## Technical fact boundary
 

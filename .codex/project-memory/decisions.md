@@ -39,3 +39,5 @@
 **Reason:** This keeps large payloads out of the application control plane, avoids instance-local upload ownership, uses storage-native multipart assembly, and prevents different recovery/integrity/storage identities from being conflated as the system evolves.
 
 **Impact:** Provider, application runtime/framework, persistence technology, deployment topology, checksum mechanism, finalization convergence details, and the dedupe/whole-file-integrity verification model remain open until their owning research settles them. Later implementation planning must preserve the accepted direction unless changed evidence or explicit user correction returns it to the architecture owner.
+
+**Related files:** `docs/product-blueprint.md`, `.codex/project-memory/topics/architecture-and-upload-lifecycle.md`, `.codex/project-specific/agent-guidance.md`
