@@ -16,6 +16,8 @@ AGENTS.md
 -> routed target-specific follow-up
 ```
 
+When the current task depends on `large-file-upload`-specific architecture, storage/integrity behavior, or repository-capability assumptions, read `.codex/project-specific/agent-guidance.md` as a thin supplement to this file. It does not replace shared workflow or safety owners.
+
 Use `.codex/project-collaboration/task-alignment.md` and `.codex/project-collaboration/project-collaboration-guide.md` for Task Alignment and cross-stage collaboration. Use `grilling` only when material requirements cannot be resolved from current evidence. Use `docs-first-research` for consequential external technical facts.
 
 ## Delivery Workflows
@@ -34,15 +36,15 @@ Do not claim an optional or technology-specific capability exists unless it is i
 
 ## Target Boundaries
 
-The application technology stack is not selected by this bootstrap. Choose framework, runtime, persistence, storage, upload protocol, deployment, and application validation from this project's own requirements and verified technical evidence.
+The application technology stack is not selected by this bootstrap. Current accepted upload architecture direction and still-open technology choices are routed through Project Memory; choose unresolved framework, runtime, persistence, storage provider, deployment, checksum/integrity mechanism, and application validation only from this project's own requirements and verified technical evidence.
 
 Do not import another project's Project Memory, product/domain code, project-specific skills, runtime scripts, deployment/backup machinery, or environment assumptions unless a later target-owned decision and current consumer justify that exact capability.
 
-Project-specific capabilities belong under `.codex/project-specific/` only when this repository develops a real need for them. Keep absent capabilities absent rather than adding placeholders.
+A thin project-specific Agent guidance supplement is installed. Additional project-specific capabilities belong under `.codex/project-specific/` only when this repository develops a real need for them. Keep absent skills, rules, prompts, and specialists absent rather than adding placeholders.
 
 ## Current Tooling State
 
-No application package manager, application runtime, root application validation command, deployment workflow, or target-specific specialist is installed yet.
+No application package manager, application runtime, root application validation command, deployment workflow, automated worktree manager, or target-specific specialist is installed yet.
 
 Target-owned Agent publication/merge workflows and dependency-free Node repository publication commands are installed. They are repository tooling only and do not select the product application's runtime or package manager. Use:
 
