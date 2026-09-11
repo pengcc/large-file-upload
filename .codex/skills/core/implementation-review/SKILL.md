@@ -7,12 +7,12 @@ and the Role Routing Display Condition. Apply that route before continuing.
 
 ## Purpose and Project Collaboration Contract
 
-Use this skill as the Codex adapter for the canonical Project Collaboration Implementation Review
-contract at `.codex/project-collaboration/contracts/implementation-review.md`. The
-project-collaboration contract owns complete implementation review, remediation re-review, review
-inputs, evaluation, finding meaning, and actionable versus clean output. This adapter retains Codex
-context loading, exact-target inspection, bounded quality lenses, report persistence, and any
-authorized GitHub result transport.
+Use this skill as the repository-owned runtime adapter for the canonical Project Collaboration
+Implementation Review contract at `.codex/project-collaboration/contracts/implementation-review.md`.
+The project-collaboration contract owns complete implementation review, remediation re-review,
+review inputs, evaluation, finding meaning, and actionable versus clean output. This adapter retains
+environment-local context loading, exact-target inspection, bounded quality lenses, report
+persistence, and any authorized GitHub result transport without becoming another semantic owner.
 
 This workflow is review-only. It does not implement fixes, approve or merge a PR, publish a clean
 marker, release, deploy, or update Project Memory. A review verdict creates no later authority.
@@ -109,15 +109,20 @@ For remediation re-review, inspect the new exact target against every prior acti
 the applicable authority lineage. Confirm the required end state and check for material regression
 or drift; do not close a finding merely because its original symptom moved.
 
-## GitHub Actionable-Result Adapter
+## GitHub Actionable-Result Effect
 
-GitHub result publication is actor-local. For a complete Implementation Review or remediation
-re-review of an exact PR, the user's explicit request to perform that review is standing
-authorization to publish actionable findings only to that exact PR when GitHub comment capability
-is available, unless the user explicitly withholds publication. This standing authorization does
-not authorize a clean marker, approval or request-changes review, thread resolution, fixes, branch
-mutation, PR metadata mutation, merge, release, deployment, or any other external effect. Other
-review targets do not acquire GitHub publication authority from this rule.
+GitHub result publication is an actor/runtime-specific external effect served by the current
+environment's available connected GitHub comment capability when the required authority and
+capability exist. For a complete Implementation Review or remediation re-review of an exact PR, the
+user's explicit request to perform that review is standing authorization to publish actionable
+findings only to that exact PR when GitHub comment capability is available, unless the user
+explicitly withholds publication. This standing authorization does not authorize a clean marker,
+approval or request-changes review, thread resolution, fixes, branch mutation, PR metadata mutation,
+merge, release, deployment, or any other external effect. Other review targets do not acquire
+GitHub publication authority from this rule. Actor identity alone does not require a separate
+repository adapter; if a later runtime cannot satisfy this bounded effect safely, follow the
+truthful degradation path below and return that demonstrated gap to planning rather than inventing
+a new owner during review.
 
 When actionable findings remain and either that exact-PR standing authorization applies or the user
 or an active Goal separately authorizes publication to the exact PR:
