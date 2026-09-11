@@ -1,6 +1,6 @@
 # Post-#512 ChatGPT Bootloader and Runtime Boundary Implementation Plan
 
-Execution Status: proposed / awaiting approval
+Execution Status: approved / active
 
 Baseline: `baseline.md`
 Applicable accepted Task Decisions: `task-decisions.md` (TD-01 through TD-04)
