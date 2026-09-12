@@ -12,11 +12,21 @@ This topic owns conditionally relevant current facts about the repository's Agen
 
 ## Publication and merge capability
 
-Target-owned Agent workflows `open-or-update-pr` and `merge-pr` own intent, authorization, and workflow boundaries. The dependency-free Node command surface at `.repo-tools/scripts/repository-publication.mjs` owns mechanical repository/GitHub publication, readiness, expected-head merge protection, and remote-result verification.
+Target-owned Agent workflows `open-or-update-pr` and `merge-pr` own intent, authorization, and workflow boundaries.
 
-Codex PreToolUse publication guards block direct `git push`, `gh pr create`, and `gh pr merge` bypasses once the maintained path is present. Merge remains separately and explicitly authorized.
+`open-or-update-pr` is the runtime-neutral PR-publication owner. Its maintained local-checkout transport is the dependency-free Node command at `.repo-tools/scripts/repository-publication.mjs`. When the active actor/runtime cannot execute that local path but has connected GitHub mutation capability and the completed delivery already exists on one exact remote feature branch, the same workflow may use its bounded connector fallback after preserving the same repository-identity, default-branch ancestry, exact-head, duplicate-PR, non-force, and final-readback protections. The fallback does not synthesize or publish an inaccessible local-only commit.
 
-Node is a repository-tooling dependency for this capability only. It is not evidence that the product application should use Node.
+A recognized user request to execute ordinary implementation or same-delivery remediation normally supplies authority for one review-ready PR unless the user explicitly selects a local-only constraint such as `keep local`, `no push`, or `no PR`. Direct bounded delivery and arbitrary file-producing work do not inherit that default authority.
+
+`merge-pr` remains separately and explicitly authorized and currently uses only the maintained local Node transport:
+
+```text
+node .repo-tools/scripts/repository-publication.mjs pr-merge <PR>
+```
+
+No connector-backed merge fallback is currently installed. Codex PreToolUse publication guards continue to block direct `git push`, `gh pr create`, and `gh pr merge` bypasses once the maintained local path is present; those guards do not prohibit another actor from using an expressly defined fallback inside the owning repository workflow.
+
+Node is a repository-tooling dependency for these maintained local transports only. It is not evidence that the product application should use Node.
 
 ## Current validation and runtime boundary
 
