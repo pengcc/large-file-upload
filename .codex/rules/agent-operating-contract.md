@@ -193,7 +193,7 @@ the relevant parts of this order:
 
 A direct bounded delivery request does not require Task Alignment establishment, persisted Task
 State, a formal plan, Plan Review, Plan Approval, or another execution-contract artifact. If a
-current Baseline or accepted Task Decision already governs the exact task, consume it without
+current Baseline or accepted Task Decision already governs that exact task, consume it without
 reconstructing or amending it. If execution discovers a material scope,
 authority, safety, or user-decision boundary, stop under the direct execution contract; do not
 manufacture the full lifecycle merely to pre-screen direct work.
