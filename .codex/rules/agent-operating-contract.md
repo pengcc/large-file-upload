@@ -338,7 +338,13 @@ global-tooling, routing, memory, reporting, publish, or other hard boundary in t
 - Do not perform destructive actions unless they are explicitly authorized by the user or fall
   within disposable infrastructure pre-authorized by the indexed external-infrastructure Project
   Memory topic.
-- Do not publish, merge, release, or deploy unless the user explicitly requests the matching workflow.
+- Do not publish through an Agent workflow unless current authority permits that exact effect. A
+  recognized user request to execute ordinary implementation or same-delivery remediation may
+  supply the `open-or-update-pr` owner's narrow authority for one review-ready PR unless the user
+  explicitly selected `keep local`, `no push`, `no PR`, or an equivalent local-only constraint.
+  Direct bounded delivery, arbitrary file-producing work, plan approval, a commit request, generic
+  readiness, and a publishable-change handoff do not independently gain that publication authority.
+  Merge, release, and deployment still require their own separate explicit authority.
 - Do not introduce dependencies, tooling, architecture changes, or workflow changes without checking project memory and explaining impact.
 - Prefer small, reversible changes.
 - Do not treat project-approved external development infrastructure as unrestricted access to

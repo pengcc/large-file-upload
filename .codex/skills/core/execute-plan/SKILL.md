@@ -177,7 +177,7 @@ complete delivered implementation or remediation review -> implementation-review
 concrete code/PR/diff/package quality-only review -> code-review
 repo-wide audit -> codebase-audit
 unclear requirements -> grilling
-PR readiness / publish handoff -> recommend implementation-review after publication; open-or-update-pr only after explicit push plus PR authorization
+PR readiness / publish handoff -> open-or-update-pr only when its publication-authority contract applies; recommend implementation-review after publication
 merge readiness -> merge-pr only after completed review and separate explicit immediate-merge authorization
 ```
 
@@ -186,11 +186,15 @@ used, then return to `execute-plan`.
 
 Do not run `open-or-update-pr` or `merge-pr` as an internal execution substep. Each effect belongs
 to its own workflow after execution; switching workflows does not itself require another user
-turn. Implementation-only authority ends at the local validated delivery. When the current user
-instruction already authorizes implementation or remediation followed by delivery as a review-ready
-PR, complete the local delivery and switch to `open-or-update-pr` without duplicate confirmation.
-Merge still requires separate explicit immediate-merge authority for one exact PR and `merge-pr`;
-implementation or PR-delivery wording does not supply it.
+turn. A recognized user request to execute ordinary implementation or same-delivery remediation
+normally authorizes one review-ready PR after the implementation owner reaches a current validated
+committed delivery, unless the user explicitly selected `keep local`, `no push`, `no PR`, or an
+equivalent local-only constraint. A direct bounded delivery request does not inherit that default;
+it switches to `open-or-update-pr` only when the request separately supplies publication authority.
+When publication authority applies, complete the local or connector-backed delivery freshness
+boundary and switch to `open-or-update-pr` without duplicate confirmation. Merge still requires
+separate explicit immediate-merge authority for one exact PR and `merge-pr`; implementation or
+PR-delivery wording does not supply it.
 
 After the authorized switch to `open-or-update-pr`, preserve that workflow's returned PR action and
 exact structured `reviewLink` in the final response. Reproduce `<returned label>: <returned URL>`
@@ -359,8 +363,10 @@ conditional on the selected execution input or project workflow.
 
 Local branch creation may be part of local execution setup. It does not authorize push, PR
 creation/update, merge, release, deployment, or any publish workflow. Push plus PR creation/update
-remain behind an explicit switch to `open-or-update-pr`; immediate merge remains behind a separate
-explicit switch to `merge-pr`.
+remain behind a switch to `open-or-update-pr` under that workflow's publication-authority contract;
+for recognized ordinary implementation/remediation this may be satisfied by the repository's
+default review-ready-delivery authority, while direct bounded delivery requires separately supplied
+publication authority. Immediate merge remains behind a separate explicit switch to `merge-pr`.
 
 ## Stepwise Execution
 
@@ -464,8 +470,10 @@ produces one local commit.
 
 `execute-plan` must not push, create or update a PR, merge, release, or deploy.
 
-Push plus PR creation/update require explicit `open-or-update-pr`. Immediate merge requires
-separate explicit `merge-pr`; canonical persistent auto-merge is deferred.
+Push plus PR creation/update belongs to `open-or-update-pr`; recognized ordinary
+implementation/remediation may supply that workflow's default one-PR authority, while a direct
+bounded delivery needs separately supplied publication authority. Immediate merge requires separate
+explicit `merge-pr`; canonical persistent auto-merge is deferred.
 
 Release and deploy are outside v0.1 `execute-plan`, `open-or-update-pr`, and `merge-pr`
 responsibilities unless a future release/deployment skill is defined.
@@ -623,9 +631,12 @@ reference's state-specific helper result: `change:pr` only for dirty/raw changes
 for a stale delivery or a current open PR.
 
 `execute-plan` must not push, create PRs, update PRs, merge, release, deploy, or mutate external
-settings. Push plus PR creation/update requires explicit user action through `open-or-update-pr`.
-Immediate merge requires completed review, separate explicit user authorization for one exact PR,
-and `merge-pr`. Canonical persistent auto-merge is deferred.
+settings. Push plus PR creation/update remains a separately owned `open-or-update-pr` effect. A
+recognized ordinary implementation/remediation request may already authorize that one review-ready
+PR under the repository default, so no duplicate publication confirmation is required; direct
+bounded delivery still requires separately supplied publication authority. Immediate merge requires
+completed review, separate explicit user authorization for one exact PR, and `merge-pr`. Canonical
+persistent auto-merge is deferred.
 
 Apply the Project Memory Update Check and its merge-timing boundary before invoking or recommending
 `update-project-memory`. Do not override the deferral for implementation-derived truth from an
