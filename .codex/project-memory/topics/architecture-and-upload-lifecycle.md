@@ -34,6 +34,15 @@ The following details remain unresolved until their owning architecture research
 
 Do not fill these gaps from another product repository or provider habit.
 
+## Verified provider constraints (official docs read 2026-10-30; re-verify before relying)
+
+- None of S3, GCS, Azure Blob or R2 documents a server-computed, readable whole-object SHA-256 after multipart assembly. S3 offers full-object CRC64NVME/CRC32/CRC32C; GCS exposes CRC32C; S3's multipart SHA-256 is composite (a checksum of part checksums).
+- None documents an idempotent completion call. S3 and GCS return `NoSuchUpload` for a completed upload, and S3 can return HTTP 200 with an error body. An ambiguous completion has to be reconciled by reading object metadata.
+- S3 documents `ListParts` as verification only; completion should use the caller's own part ledger.
+- Not verified: S3 Batch Operations computing a SHA-256 at rest for multipart objects; presigned `UploadPart` for S3, R2 and GCS XML multipart; R2 `x-amz-checksum-*` support.
+
+These constrain but do not settle the residual questions above. Sources and the full comparison are in `docs/research/storage-provider-research.md`, a research record compiled from delegated reports and not re-verified page by page.
+
 ## Product boundary
 
 `docs/product-blueprint.md` remains the product/research boundary for the complete logical upload lifecycle, reliability constraints, and architecture success criteria. This topic records accepted current architecture facts without copying that blueprint.

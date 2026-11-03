@@ -10,5 +10,5 @@ This file routes conditionally relevant Project Memory reads. It does not own pr
 | `decisions.md#D-002-adopt-shared-workflow-semantics-without-source-project-runtime-dependency` | Adopting, extending, replacing, or reviewing reusable workflow/tooling assets. |
 | `decisions.md#D-003-validation-remains-target-owned-and-currently-unset` | Planning or executing application validation, adding package/toolchain commands, or interpreting validation/publication examples in adopted shared workflow text. |
 | `decisions.md#D-004-use-browser-to-object-storage-multipart-with-a-stateless-control-plane` | Reconsidering the accepted upload data/control plane, storage-side assembly, or identity-separation direction. |
-
-No durable lesson sections have been admitted yet.
+| `lessons-learned.md#measure-io-paths-on-the-real-target-mount` | Making or relying on storage-path, throughput, mount, or provider performance conclusions. |
+| `lessons-learned.md#repeat-and-interleave-performance-samples-before-concluding` | Taking performance measurements or drawing conclusions from them. |

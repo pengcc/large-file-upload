@@ -22,6 +22,8 @@ Node is a repository-tooling dependency for this capability only. It is not evid
 
 Repository publication tooling has direct Node tests and structural/readback validation. There is still no selected application package manager, application runtime/framework, root application validation command, deployment workflow, automated worktree manager, application source tree, or product-specific runtime tooling.
 
+`spikes/` holds disposable research prototypes, not product source. `spikes/shared-disk/` (Node 24 with built-in TypeScript type stripping and `node:sqlite`, no dependencies, its own `npm test` via `node --test`) evaluates the server-receives-parts alternative to D-004. It does not select the product runtime, persistence, or validation surface; do not infer them from it. Its measured results are in `docs/research/shared-disk-spike-report.md`, a research record rather than project fact.
+
 Before product implementation begins, the architecture/toolchain owner must establish the target-owned application validation surface. Do not infer `pnpm`, deployment commands, or source-project helpers from adopted workflow text.
 
 ## External-source boundary
