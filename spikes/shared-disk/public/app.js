@@ -1,3 +1,5 @@
+import { Sha256 } from './sha256.js';
+
 // Browser client for the shared-disk spike. Plain JS (browsers cannot run TypeScript directly and
 // the spike has no build step). Mirrors src/client.ts: Blob.slice per part, XHR PUT for upload
 // progress events, per-part CRC32, resume via the server's part list.
@@ -45,6 +47,16 @@ function putPart(sessionId, n, blob, crc, fingerprint, onProgress, signal) {
     xhr.onabort = () => reject(new Error('stopped'));
     xhr.send(blob);
   });
+}
+
+async function hashFile(file, onProgress) {
+  const h = new Sha256();
+  const block = 8 * 1024 * 1024;
+  for (let start = 0; start < file.size; start += block) {
+    h.update(new Uint8Array(await file.slice(start, Math.min(start + block, file.size)).arrayBuffer()));
+    onProgress(Math.min(start + block, file.size));
+  }
+  return h.hex();
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -122,9 +134,15 @@ async function upload() {
   const uploadSecs = (performance.now() - started) / 1000;
   log(`传输完成：${uploadSecs.toFixed(1)} 秒，${(file.size / 1e6 / uploadSecs).toFixed(1)} MB/s；开始服务端校验`);
 
+  // The server requires the whole-file SHA-256. Web Crypto cannot stream, so hash with an
+  // incremental JS implementation (one extra read of the file, and the slowest step of this client).
+  const hashStart = performance.now();
+  const sha256 = await hashFile(file, (done) => ($('state').textContent = `计算 SHA-256：${(done / 1e6).toFixed(0)} / ${(file.size / 1e6).toFixed(0)} MB`));
+  log(`SHA-256 计算：${((performance.now() - hashStart) / 1000).toFixed(1)} 秒，${(file.size / 1e6 / ((performance.now() - hashStart) / 1000)).toFixed(0)} MB/s`);
+
   for (let round = 0; round < 120; round++) {
     try {
-      const done = await api('POST', `/sessions/${session.id}/complete`, {});
+      const done = await api('POST', `/sessions/${session.id}/complete`, { sha256 });
       return showDone(done, (performance.now() - started) / 1000);
     } catch (err) {
       const detail = err.body?.detail ?? {};
@@ -159,5 +177,13 @@ async function measure(kind) {
 
 $('start').onclick = () => upload().catch((err) => log(`出错：${err.message}`));
 $('stop').onclick = () => controller?.abort();
+$('measure-sha-js').onclick = async () => {
+  const file = $('file').files[0];
+  if (!file) return log('先选择文件');
+  const t0 = performance.now();
+  const hex = await hashFile(file, () => {});
+  const secs = (performance.now() - t0) / 1000;
+  log(`SHA-256（整文件，纯 JS 增量）：${(file.size / 1e6).toFixed(0)} MB，${secs.toFixed(1)} 秒，${(file.size / 1e6 / secs).toFixed(1)} MB/s，${hex}`);
+};
 $('measure-crc').onclick = () => measure('crc').catch((err) => log(`出错：${err.message}`));
 $('measure-sha').onclick = () => measure('sha').catch((err) => log(`出错：${err.message}`));

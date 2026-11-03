@@ -6,7 +6,7 @@ import { after, before, describe, test } from 'node:test';
 import { crc32 } from 'node:zlib';
 import { ClientError, getSession, uploadFile } from '../src/client.ts';
 import { stagingPath } from '../src/storage.ts';
-import { crashedUpload, dropEnv, finalFile, makeEnv, makeFile, PART, shasum, startServer, stopServer, type Env, type Running } from './helpers.ts';
+import { completeRaw, crashedUpload, dropEnv, finalFile, makeEnv, makeFile, PART, shasum, startServer, stopServer, type Env, type Running } from './helpers.ts';
 
 const SIZE = PART * 10 + 1234; // 11 parts, last one short
 
@@ -120,7 +120,7 @@ describe('shared-disk upload scenarios (single server)', () => {
     req.on('error', () => {});
     req.write(Buffer.alloc(1000));
     await new Promise((r) => setTimeout(r, 300));
-    const res = await fetch(`${srv.url}/sessions/${id}/complete`, { method: 'POST', body: '{}' });
+    const res = await completeRaw(srv.url, id, file);
     assert.equal(res.status, 409);
     assert.match(String((await res.json()).error), /in flight/);
     req.destroy();

@@ -12,14 +12,17 @@ network: every number below is specific to this setup.
 
 ## 1. Scenario results
 
-14 automated scenarios pass both on local disk and with data on the NAS mount
+25 automated scenarios pass both on local disk and with data on the NAS mount
 (`SPIKE_TEST_DATA_DIR=/Volumes/upload-test npm test`): byte-identical parallel upload, idempotent
 part retry, crash + resume sending only missing parts, rejected bad CRC / short body, post-accept
 corruption caught at completion (only that part re-sent), source changed (mtime differs: refused;
 same size and mtime: caught by whole-file digest, never COMPLETE), complete refused while a write is
 in flight, server killed before recording a part, finalizer killed before and after publish
 (retry converges, no re-upload), two instances completing the same session (one final file),
-stale-session cleanup.
+stale-session cleanup. Review remediation (see section 8) added: mandatory digest, invalid
+names and part numbers, write-lease fence, same-process double complete, abort during
+finalization, cleanup that spares active and finalizing sessions, rejected-part status delivery,
+and the browser SHA-256 implementation against `node:crypto`.
 
 ## 2. 10 GB end-to-end runs
 
@@ -49,7 +52,7 @@ at far offsets of a 2 GiB preallocated file ~53-98 MB/s). So the mount and Node 
 | One awaited `pwrite` per received chunk (avg chunk ~64 KiB) | 8 runs: 5.6, 7.4, 7.3, 7.5, 7.8, 7.7, 9.3, 7.9 s (median 7.6 s, all > 4 s) |
 | `createWriteStream` via `pipeline` (with or without `start`) | bimodal: 0.8-1.0 s in 2 of 6 runs, 7.4-10.2 s in the other 4 |
 | Gather 16 chunks, one `writev` | 1.4-1.8 s in every run (11 runs) |
-| Coalesce to 8 MiB, one `pwrite` per block | 1.2-1.6 s in every run (19 runs) |
+| Coalesce to 8 MiB, one `pwrite` per block | 1.2-1.6 s in every run (14 runs; 16 counting the block-size sweep) |
 | Coalesce to 64 KiB / 256 KiB / 1 MiB / 4 MiB / 8 MiB / 64 MiB (first sweep) | 1.3-1.4 / 2.6-2.8 / 1.6-1.8 / 1.3 / 1.25-1.3 / 1.2 s |
 
 Time inside a fast run is almost all the final `fsync` (~1.1-1.3 s of ~1.3 s, i.e. flushing 64 MiB
@@ -128,3 +131,36 @@ internals). Mitigations to test if it matters: smaller parts, reusing one buffer
 - Power-loss durability: only `fsync` behaviour was relied on, not tested.
 - Root cause of the intermittent slow path (section 3) and the memory copies (section 5).
 - Everything about object storage (GCS, S3, others); that is a separate spike.
+
+## 8. Review remediation (PR review of head 59111e4)
+
+An independent read of the spike found three must-fix and five should-fix defects; all were fixed
+and each fix is covered by a test that fails when the fix is reverted (checked by reverting the
+fence, the per-claim token and the abort rule one at a time).
+
+- **Write fence.** The first design only waited for a time margin, so a stalled SMB write could
+  land after a finalizer claimed and verified the session. Now a writer renews its ledger
+  registration immediately before every disk write and before the fsync, and the renewal fails once
+  the session is claimed or the registration lapsed. The bound that remains: one write call
+  stalling longer than the lease (default 120 s) can still land late, and cross-process clock
+  skew shrinks that margin.
+- **Detecting late writes by mtime does not work on SMB.** An mtime/size comparison around the
+  verification scan was added and then removed: on this mount, reading a file moves its mtime
+  (probe: stable for 6 s after write, then a ~7 s jump after one full read), so healthy uploads
+  were reported as modified and the suite failed on the NAS while passing locally.
+- **Browser whole-file digest.** The server now rejects `complete` without a 64-hex SHA-256; before,
+  a browser upload whose source changed mid-upload could be marked COMPLETE. Web Crypto cannot
+  stream, so the page uses a plain-JS incremental SHA-256 (verified against `node:crypto`). Measured
+  on a 300 MB in-memory file: ~226 MB/s, matching the whole-buffer Web Crypto digest; a 10 GB file
+  would take roughly 45 s by extrapolation (optimistic, not measured on a real 10 GB file).
+- **Per-claim token.** The finalization owner was the process, so a retry through the same process
+  became a second concurrent finalizer. The owner is now a fresh token per claim.
+- **Other fixes.** Abort refused while FINALIZING; file names with NUL/control characters or over
+  255 bytes rejected; non-numeric part numbers return 400; internal errors no longer echo paths;
+  cleanup ages from last activity and aborts conditionally; rejected part PUTs deliver their
+  status instead of a connection reset.
+- **After remediation.** 25/25 scenarios pass on local disk and on the NAS mount; a 1 GB upload to
+  the NAS took 27.6 s (38.9 MB/s, concurrency 1) against 23 s before the fence was added: a single
+  run, so no regression or improvement is claimed. The 10 GB NAS run in section 2 predates the
+  remediation and was not repeated.
+

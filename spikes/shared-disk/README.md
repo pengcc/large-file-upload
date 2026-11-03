@@ -13,10 +13,18 @@ dependencies.
 - `POST /sessions` fixes a part size for the session and preallocates `staging/<id>.upload`.
 - `PUT /sessions/:id/parts/:n` streams the body to its offset, computes CRC32, fsyncs, then
   records the part in the ledger. An optional `x-part-crc32` header is checked.
-- `POST /sessions/:id/complete` claims the session (lease), checks every part is recorded, reads
-  the whole staging file once (SHA-256 + per-part CRC32), compares with the ledger, records the
-  digest, renames into `final/<id>/<name>`, then marks COMPLETE. Any step can crash; a retry
-  converges.
+- `POST /sessions/:id/complete` requires the client's whole-file SHA-256. It claims the session
+  under a fresh per-claim token (a retry through the same process cannot become a second
+  finalizer), checks every part is recorded, reads the whole staging file once (SHA-256 + per-part
+  CRC32), compares with the ledger and the client digest, records the digest, renames into
+  `final/<id>/<name>`, then marks COMPLETE. Any step can crash; a retry converges.
+- Write fence: a part write registers in the ledger and renews that registration immediately before
+  every disk write and its fsync; a finalizer cannot claim while a registration is live, and a
+  writer whose registration lapsed or whose session was claimed is refused. Known limit: one write
+  call stalling longer than `SPIKE_WRITE_LEASE_MS` (default 120 s) could still land late; instances
+  sharing a ledger must have synchronized clocks. Abort is refused while FINALIZING.
+- The ledger schema changed during review remediation (`last_activity`); delete any older
+  `.spike-ledger.sqlite` before running.
 - The ledger (SQLite, WAL) lives on local disk and is the source of truth. Several server
   processes can share it.
 

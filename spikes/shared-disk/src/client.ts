@@ -22,7 +22,6 @@ export type SessionView = {
 export type UploadOptions = {
   sessionId?: string;
   concurrency?: number;
-  claimSha256?: boolean;
   stopAfterParts?: number; // test hook: simulate a client crash after this many parts
   onSession?: (session: SessionView) => void;
   onPart?: (partNumber: number) => void;
@@ -134,7 +133,7 @@ export async function uploadFile(server: string, path: string, opts: UploadOptio
     await uploadParts(todo);
     if (opts.stopAfterParts !== undefined) throw new SimulatedCrash('client stopped before complete');
 
-    const sha256 = opts.claimSha256 === false ? undefined : await sha256File(path);
+    const sha256 = await sha256File(path);
     for (let round = 0; round < 60; round++) {
       try {
         return (await withRetry(retries, () =>

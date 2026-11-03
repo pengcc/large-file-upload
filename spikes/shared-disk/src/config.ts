@@ -6,7 +6,7 @@ export type Config = {
   ledgerPath: string; // SQLite file; keep on local disk
   minPartSize: number;
   maxParts: number;
-  writeLeaseMs: number; // max time one part write may take before it aborts itself
+  writeLeaseMs: number; // write registration lifetime; renewed before each write, so it bounds a stall, not a part
   finalizeLeaseMs: number; // how long a finalizer owns a session before others may take over
   fault: string | undefined; // test-only fault injection point
 };

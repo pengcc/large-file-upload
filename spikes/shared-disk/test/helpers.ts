@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, execFile, type ChildProcess } from 'node:child_process';
-import { SimulatedCrash, uploadFile, type UploadOptions } from '../src/client.ts';
+import { SimulatedCrash, sha256File, uploadFile, type UploadOptions } from '../src/client.ts';
 import { randomBytes } from 'node:crypto';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
@@ -87,6 +87,15 @@ export async function crashedUpload(url: string, path: string, opts: UploadOptio
   const err = await uploadFile(url, path, { concurrency: 1, ...opts, onSession: (s) => (id = s.id) }).catch((e) => e);
   assert.ok(err instanceof SimulatedCrash, `expected simulated crash, got ${err}`);
   return id;
+}
+
+// Raw complete request with the file's real digest (the server requires one).
+export async function completeRaw(url: string, id: string, file: string): Promise<Response> {
+  return fetch(`${url}/sessions/${id}/complete`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sha256: await sha256File(file) }),
+  });
 }
 
 // Independent digest via the OS tool, so verification does not rely on the code under test.

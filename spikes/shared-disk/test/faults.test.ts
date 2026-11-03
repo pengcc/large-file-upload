@@ -7,7 +7,7 @@ import { loadConfig } from '../src/config.ts';
 import { Ledger } from '../src/ledger.ts';
 import { cleanupExpired } from '../src/server.ts';
 import { exists, stagingPath } from '../src/storage.ts';
-import { crashedUpload, dropEnv, finalFile, makeEnv, makeFile, PART, shasum, startServer, stopServer, type Env, type Running } from './helpers.ts';
+import { completeRaw, crashedUpload, dropEnv, finalFile, makeEnv, makeFile, PART, shasum, startServer, stopServer, type Env, type Running } from './helpers.ts';
 
 const SIZE = PART * 10 + 1234;
 // Short leases so takeover after a crashed writer or finalizer happens within the test.
@@ -49,7 +49,7 @@ describe('crash and concurrency scenarios', () => {
   test('finalizer killed after verification, before publish: another attempt completes after lease expiry', async () => {
     const dying = await start({ SPIKE_FAULT: 'before-publish' });
     const id = await crashedUpload(dying.url, file, { stopAfterParts: 11 });
-    const lost = await fetch(`${dying.url}/sessions/${id}/complete`, { method: 'POST', body: '{}' }).catch((e) => e);
+    const lost = await completeRaw(dying.url, id, file).catch((e) => e);
     assert.ok(lost instanceof Error, 'response lost');
     await dying.exited;
     const srv = await start();
@@ -61,7 +61,7 @@ describe('crash and concurrency scenarios', () => {
   test('finalizer killed after publish, before recording COMPLETE: retry converges without re-upload', async () => {
     const dying = await start({ SPIKE_FAULT: 'after-publish' });
     const id = await crashedUpload(dying.url, file, { stopAfterParts: 11 });
-    const lost = await fetch(`${dying.url}/sessions/${id}/complete`, { method: 'POST', body: '{}' }).catch((e) => e);
+    const lost = await completeRaw(dying.url, id, file).catch((e) => e);
     assert.ok(lost instanceof Error, 'response lost');
     await dying.exited;
     assert.equal(await exists(stagingPath(env.dataDir, id)), false, 'staging already renamed');
@@ -78,7 +78,7 @@ describe('crash and concurrency scenarios', () => {
     const b = await start();
     const id = await crashedUpload(a.url, file, { stopAfterParts: 11 });
     const results = await Promise.all(
-      [a, b].map((r) => fetch(`${r.url}/sessions/${id}/complete`, { method: 'POST', body: '{}' }).then((res) => res.status)),
+      [a, b].map((r) => completeRaw(r.url, id, file).then((res) => res.status)),
     );
     assert.ok(results.includes(200), `statuses ${results}`);
     for (const status of results) assert.ok(status === 200 || status === 409, `statuses ${results}`);

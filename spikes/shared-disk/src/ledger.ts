@@ -19,6 +19,7 @@ export type Session = {
   finalPath: string | null;
   failure: string | null;
   createdAt: number;
+  lastActivity: number;
 };
 
 export type Part = { partNumber: number; size: number; crc32: number };
@@ -40,6 +41,7 @@ function toSession(r: Row): Session {
     finalPath: (r.final_path as string | null) ?? null,
     failure: (r.failure as string | null) ?? null,
     createdAt: Number(r.created_at),
+    lastActivity: Number(r.last_activity),
   };
 }
 
@@ -65,7 +67,8 @@ export class Ledger {
         verified_sha256 TEXT,
         final_path TEXT,
         failure TEXT,
-        created_at INTEGER NOT NULL
+        created_at INTEGER NOT NULL,
+        last_activity INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS parts (
         session_id TEXT NOT NULL,
@@ -99,13 +102,15 @@ export class Ledger {
     }
   }
 
-  createSession(s: Omit<Session, 'state' | 'finalizeOwner' | 'finalizeLeaseUntil' | 'verifiedSha256' | 'finalPath' | 'failure'>): void {
+  createSession(
+    s: Omit<Session, 'state' | 'finalizeOwner' | 'finalizeLeaseUntil' | 'verifiedSha256' | 'finalPath' | 'failure' | 'lastActivity'>,
+  ): void {
     this.db
       .prepare(
-        `INSERT INTO sessions (id, file_name, file_size, part_size, part_count, fingerprint, state, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, 'UPLOADING', ?)`,
+        `INSERT INTO sessions (id, file_name, file_size, part_size, part_count, fingerprint, state, created_at, last_activity)
+         VALUES (?, ?, ?, ?, ?, ?, 'UPLOADING', ?, ?)`,
       )
-      .run(s.id, s.fileName, s.fileSize, s.partSize, s.partCount, s.fingerprint, s.createdAt);
+      .run(s.id, s.fileName, s.fileSize, s.partSize, s.partCount, s.fingerprint, s.createdAt, s.createdAt);
   }
 
   getSession(id: string): Session | undefined {
@@ -139,6 +144,24 @@ export class Ledger {
     });
   }
 
+  // Extends a live write registration. Returns false when the registration is gone or expired, or
+  // the session is no longer UPLOADING (a finalizer claimed it). A writer must call this
+  // immediately before every disk write and before its fsync, and stop on false: this is the fence
+  // that keeps a write from landing after finalization. It bounds, but cannot remove, the risk of
+  // a single write call stalling longer than the lease (documented limit).
+  renewWrite(writerId: string, now: number, newExpiresAt: number): boolean {
+    return this.tx(() => {
+      const r = this.db
+        .prepare(
+          `UPDATE writes_in_flight SET expires_at = ?
+           WHERE writer_id = ? AND expires_at > ?
+             AND EXISTS (SELECT 1 FROM sessions s WHERE s.id = writes_in_flight.session_id AND s.state = 'UPLOADING')`,
+        )
+        .run(newExpiresAt, writerId, now);
+      return Number(r.changes) > 0;
+    });
+  }
+
   endWrite(writerId: string): void {
     this.db.prepare('DELETE FROM writes_in_flight WHERE writer_id = ?').run(writerId);
   }
@@ -154,14 +177,16 @@ export class Ledger {
            ON CONFLICT (session_id, part_number) DO UPDATE SET size = excluded.size, crc32 = excluded.crc32`,
         )
         .run(sessionId, part.partNumber, part.size, part.crc32);
+      this.db.prepare('UPDATE sessions SET last_activity = ? WHERE id = ?').run(Date.now(), sessionId);
       this.endWrite(writerId);
     });
   }
 
-  // Claims the session for finalization. Returns the session as claimed, or explains why not.
+  // Claims the session for finalization under a fresh per-claim token. While another claim's lease
+  // is live nobody else may claim, including a retry of the same request through the same process.
   claimFinalize(
     sessionId: string,
-    owner: string,
+    token: string,
     now: number,
     leaseMs: number,
   ): { ok: true; session: Session } | { ok: false; status: number; reason: string; session?: Session } {
@@ -170,7 +195,7 @@ export class Ledger {
       if (!s) return { ok: false, status: 404, reason: 'no such session' };
       if (s.state === 'COMPLETE') return { ok: false, status: 200, reason: 'already complete', session: s };
       if (s.state === 'ABORTED' || s.state === 'FAILED') return { ok: false, status: 409, reason: `session is ${s.state}`, session: s };
-      if (s.state === 'FINALIZING' && s.finalizeOwner !== owner && (s.finalizeLeaseUntil ?? 0) > now) {
+      if (s.state === 'FINALIZING' && (s.finalizeLeaseUntil ?? 0) > now) {
         return { ok: false, status: 409, reason: 'finalization in progress elsewhere', session: s };
       }
       const live = this.db
@@ -179,34 +204,42 @@ export class Ledger {
       if (Number(live.n) > 0) return { ok: false, status: 409, reason: 'part writes still in flight', session: s };
       this.db
         .prepare(`UPDATE sessions SET state = 'FINALIZING', finalize_owner = ?, finalize_lease_until = ? WHERE id = ?`)
-        .run(owner, now + leaseMs, sessionId);
+        .run(token, now + leaseMs, sessionId);
       return { ok: true, session: this.getSession(sessionId)! };
     });
   }
 
-  private ownedUpdate(sessionId: string, owner: string, sql: string, ...params: (string | number | null)[]): void {
+  private ownedUpdate(sessionId: string, token: string, sql: string, ...params: (string | number | null)[]): void {
     this.tx(() => {
       const s = this.getSession(sessionId);
-      if (!s || s.state !== 'FINALIZING' || s.finalizeOwner !== owner) {
+      if (!s || s.state !== 'FINALIZING' || s.finalizeOwner !== token) {
         throw new LedgerError(409, 'lost finalization ownership');
       }
       this.db.prepare(sql).run(...params, sessionId);
     });
   }
 
-  recordVerified(sessionId: string, owner: string, sha256: string, finalPath: string): void {
-    this.ownedUpdate(sessionId, owner, 'UPDATE sessions SET verified_sha256 = ?, final_path = ? WHERE id = ?', sha256, finalPath);
+  recordVerified(sessionId: string, token: string, sha256: string, finalPath: string): void {
+    this.ownedUpdate(sessionId, token, 'UPDATE sessions SET verified_sha256 = ?, final_path = ? WHERE id = ?', sha256, finalPath);
   }
 
-  markComplete(sessionId: string, owner: string): void {
-    this.ownedUpdate(sessionId, owner, `UPDATE sessions SET state = 'COMPLETE', finalize_owner = NULL, finalize_lease_until = NULL WHERE id = ?`);
+  // Idempotent: a session already COMPLETE (e.g. completed by the claim that this request lost) stays so.
+  markComplete(sessionId: string, token: string): void {
+    this.tx(() => {
+      const s = this.getSession(sessionId);
+      if (s?.state === 'COMPLETE') return;
+      if (!s || s.state !== 'FINALIZING' || s.finalizeOwner !== token) throw new LedgerError(409, 'lost finalization ownership');
+      this.db
+        .prepare(`UPDATE sessions SET state = 'COMPLETE', finalize_owner = NULL, finalize_lease_until = NULL WHERE id = ?`)
+        .run(sessionId);
+    });
   }
 
   // Verification found bad parts: drop them and return the session to UPLOADING for re-upload.
-  reopenWithBadParts(sessionId: string, owner: string, badParts: number[]): void {
+  reopenWithBadParts(sessionId: string, token: string, badParts: number[]): void {
     this.tx(() => {
       const s = this.getSession(sessionId);
-      if (!s || s.state !== 'FINALIZING' || s.finalizeOwner !== owner) throw new LedgerError(409, 'lost finalization ownership');
+      if (!s || s.state !== 'FINALIZING' || s.finalizeOwner !== token) throw new LedgerError(409, 'lost finalization ownership');
       const del = this.db.prepare('DELETE FROM parts WHERE session_id = ? AND part_number = ?');
       for (const n of badParts) del.run(sessionId, n);
       this.db
@@ -215,17 +248,34 @@ export class Ledger {
     });
   }
 
-  markFailed(sessionId: string, owner: string, failure: string): void {
-    this.ownedUpdate(sessionId, owner, `UPDATE sessions SET state = 'FAILED', failure = ?, finalize_owner = NULL, finalize_lease_until = NULL WHERE id = ?`, failure);
+  markFailed(sessionId: string, token: string, failure: string): void {
+    this.ownedUpdate(sessionId, token, `UPDATE sessions SET state = 'FAILED', failure = ?, finalize_owner = NULL, finalize_lease_until = NULL WHERE id = ?`, failure);
   }
 
+  // Refused while FINALIZING: a finalizer may be about to publish. A dead finalizer is recovered by
+  // calling complete again once its lease expires, not by abort.
   abort(sessionId: string): Session {
     return this.tx(() => {
       const s = this.getSession(sessionId);
       if (!s) throw new LedgerError(404, 'no such session');
-      if (s.state === 'COMPLETE') throw new LedgerError(409, 'session is COMPLETE');
-      this.db.prepare(`UPDATE sessions SET state = 'ABORTED' WHERE id = ?`).run(sessionId);
-      return { ...s, state: 'ABORTED' };
+      if (s.state === 'COMPLETE' || s.state === 'FINALIZING') throw new LedgerError(409, `session is ${s.state}`);
+      if (s.state === 'UPLOADING') this.db.prepare(`UPDATE sessions SET state = 'ABORTED' WHERE id = ?`).run(sessionId);
+      return this.getSession(sessionId)!;
+    });
+  }
+
+  // Aborts only if still UPLOADING, idle since before `cutoff`, and with no live write. One
+  // transaction, so a session that just started finalizing or receiving parts is never aborted.
+  abortIfStale(sessionId: string, cutoff: number, now: number): boolean {
+    return this.tx(() => {
+      const r = this.db
+        .prepare(
+          `UPDATE sessions SET state = 'ABORTED'
+           WHERE id = ? AND state = 'UPLOADING' AND last_activity < ?
+             AND NOT EXISTS (SELECT 1 FROM writes_in_flight w WHERE w.session_id = sessions.id AND w.expires_at > ?)`,
+        )
+        .run(sessionId, cutoff, now);
+      return Number(r.changes) > 0;
     });
   }
 }

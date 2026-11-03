@@ -33,15 +33,20 @@ export class LengthMismatch extends Error {}
 // Larger writes matter on network mounts: writing each ~64 KiB socket chunk separately (or via
 // createWriteStream) was intermittently slow over SMB (median 7.6 s per 64 MiB part vs 1.3 s coalesced); see docs/research/shared-disk-spike-report.md.
 const WRITE_BLOCK = 8 * 1024 * 1024;
+// While a slow client is still sending, keep the write registration alive this often.
+const HEARTBEAT_MS = 10_000;
 
 // Writes `body` into the staging file at `offset` in WRITE_BLOCK-sized writes, computing CRC32 on
 // the way, and fsyncs before resolving. Rejects if the body length differs from `expected`.
+// `renew` must throw when the caller's write registration is no longer valid; it runs immediately
+// before every disk write and before the fsync, so no write starts after finalization claimed the
+// session. A single write call that stalls longer than the registration lease can still land late.
 export async function writePart(
   path: string,
   offset: number,
   expected: number,
   body: Readable,
-  signal: AbortSignal,
+  renew: () => void,
 ): Promise<{ size: number; crc32: number }> {
   const fh = await open(path, 'r+');
   try {
@@ -50,16 +55,22 @@ export async function writePart(
     let pending: Buffer[] = [];
     let pendingBytes = 0;
     let writeAt = offset;
+    let lastRenew = Date.now();
     const flushPending = async () => {
       if (!pendingBytes) return;
       const block = Buffer.concat(pending, pendingBytes);
       pending = [];
       pendingBytes = 0;
+      renew();
+      lastRenew = Date.now();
       await fh.write(block, 0, block.length, writeAt);
       writeAt += block.length;
     };
     for await (const chunk of body as AsyncIterable<Buffer>) {
-      signal.throwIfAborted();
+      if (Date.now() - lastRenew > HEARTBEAT_MS) {
+        renew();
+        lastRenew = Date.now();
+      }
       size += chunk.length;
       if (size > expected) throw new LengthMismatch(`body longer than ${expected}`);
       crc = crc32(chunk, crc);
@@ -69,6 +80,7 @@ export async function writePart(
     }
     await flushPending();
     if (size !== expected) throw new LengthMismatch(`body was ${size} bytes, expected ${expected}`);
+    renew();
     await fh.sync();
     return { size, crc32: crc >>> 0 };
   } finally {

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { readFile, rm } from 'node:fs/promises';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,9 +9,19 @@ import { Ledger, LedgerError, type Session } from './ledger.ts';
 import { createStaging, exists, finalPathFor, LengthMismatch, publish, scanFile, stagingPath, writePart } from './storage.ts';
 
 const PUBLIC_DIR = fileURLToPath(new URL('../public/', import.meta.url));
-// A writer aborts itself at writeLeaseMs; its ledger registration lasts this much longer so a
-// finalizer can never start while the write might still be landing bytes.
-const WRITE_LEASE_MARGIN_MS = 5_000;
+const SHA256_HEX = /^[0-9a-f]{64}$/i;
+const CLIENT_ABORT_CODES = new Set(['ECONNRESET', 'ERR_STREAM_PREMATURE_CLOSE', 'ECONNABORTED']);
+
+// Names must be a single path segment the filesystem will accept and safe to echo.
+function validFileName(name: string): boolean {
+  return (
+    name.length > 0 &&
+    Buffer.byteLength(name) <= 255 &&
+    basename(name) === name &&
+    !name.startsWith('.') &&
+    !/[\u0000-\u001f\u007f]/.test(name)
+  );
+}
 
 class HttpError extends Error {
   readonly status: number;
@@ -72,13 +83,17 @@ export function createApp(cfg: Config): { server: Server; ledger: Ledger; instan
       process.kill(process.pid, 'SIGKILL');
     }
   };
+  // Test-only: makes a phase slow so overlapping requests can be exercised deterministically.
+  const slow = async (point: string) => {
+    if (cfg.fault === point) await sleep(1500);
+  };
 
   async function createSession(req: IncomingMessage, res: ServerResponse) {
     const body = await readJson(req);
     const fileName = String(body.fileName ?? '');
     const fileSize = Number(body.fileSize);
     const fingerprint = String(body.fingerprint ?? '');
-    if (!fileName || basename(fileName) !== fileName || fileName.startsWith('.')) throw new HttpError(400, 'invalid fileName');
+    if (!validFileName(fileName)) throw new HttpError(400, 'invalid fileName');
     if (!Number.isSafeInteger(fileSize) || fileSize <= 0) throw new HttpError(400, 'invalid fileSize');
     const partSize = choosePartSize(fileSize, cfg);
     const partCount = Math.ceil(fileSize / partSize);
@@ -95,19 +110,24 @@ export function createApp(cfg: Config): { server: Server; ledger: Ledger; instan
     send(res, 200, { session: view(s), parts: ledger.parts(id) });
   }
 
-  async function putPart(id: string, n: number, req: IncomingMessage, res: ServerResponse) {
+  async function putPart(id: string, rawPart: string, req: IncomingMessage, res: ServerResponse) {
+    const n = /^[0-9]+$/.test(rawPart) ? Number(rawPart) : NaN;
+    const known = ledger.getSession(id);
+    if (!known) throw new HttpError(404, 'no such session');
+    if (!Number.isSafeInteger(n) || n < 1 || n > known.partCount) throw new HttpError(400, 'invalid part number');
     const writerId = randomUUID();
-    const s = ledger.beginWrite(id, n, writerId, Date.now() + cfg.writeLeaseMs + WRITE_LEASE_MARGIN_MS);
+    const s = ledger.beginWrite(id, n, writerId, Date.now() + cfg.writeLeaseMs);
+    const renew = () => {
+      if (!ledger.renewWrite(writerId, Date.now(), Date.now() + cfg.writeLeaseMs)) throw new HttpError(409, 'write lease lost');
+    };
     try {
-      if (!Number.isInteger(n) || n < 1 || n > s.partCount) throw new HttpError(400, 'invalid part number');
       const fp = req.headers['x-file-fingerprint'];
       if (fp !== undefined && fp !== s.fingerprint) throw new HttpError(409, 'file fingerprint changed');
       const expected = expectedPartSize(s, n);
       const declared = req.headers['x-part-crc32'];
-      const signal = AbortSignal.timeout(cfg.writeLeaseMs);
       let written: { size: number; crc32: number };
       try {
-        written = await writePart(stagingPath(cfg.dataDir, id), (n - 1) * s.partSize, expected, req, signal);
+        written = await writePart(stagingPath(cfg.dataDir, id), (n - 1) * s.partSize, expected, req, renew);
       } catch (err) {
         if (err instanceof LengthMismatch) throw new HttpError(400, err.message);
         throw err;
@@ -125,28 +145,46 @@ export function createApp(cfg: Config): { server: Server; ledger: Ledger; instan
 
   async function complete(id: string, req: IncomingMessage, res: ServerResponse) {
     const body = await readJson(req);
-    const claimedSha256 = typeof body.sha256 === 'string' ? body.sha256.toLowerCase() : undefined;
-    const claim = ledger.claimFinalize(id, instanceId, Date.now(), cfg.finalizeLeaseMs);
+    // The digest is mandatory: it is the only check that the bytes the client sent are the bytes of
+    // the source file it claims, so a client that cannot produce one cannot complete.
+    if (typeof body.sha256 !== 'string' || !SHA256_HEX.test(body.sha256)) throw new HttpError(400, 'sha256 (64 hex chars) is required');
+    const claimedSha256 = body.sha256.toLowerCase();
+    const token = randomUUID(); // per claim, not per process: a retry through this process is a different claim
+    const claim = ledger.claimFinalize(id, token, Date.now(), cfg.finalizeLeaseMs);
     if (!claim.ok) {
       if (claim.status === 200 && claim.session) return send(res, 200, view(claim.session));
       throw new HttpError(claim.status, claim.reason, claim.session ? view(claim.session) : undefined);
     }
-    const s = claim.session;
+    try {
+      await finalize(id, token, claimedSha256, res);
+    } catch (err) {
+      // Our claim may have been superseded after the file was already published and recorded.
+      if (err instanceof LedgerError && err.status === 409) {
+        const now = ledger.getSession(id);
+        if (now?.state === 'COMPLETE') return send(res, 200, view(now));
+      }
+      throw err;
+    }
+  }
+
+  async function finalize(id: string, token: string, claimedSha256: string, res: ServerResponse) {
+    const s = ledger.getSession(id)!;
     const staging = stagingPath(cfg.dataDir, id);
     const finalPath = finalPathFor(cfg.dataDir, id, s.fileName);
+    await slow('slow-scan');
 
     // Recovery: a previous finalizer verified and renamed but did not record COMPLETE.
     if (s.verifiedSha256 && !(await exists(staging)) && (await exists(finalPath))) {
       const scan = await scanFile(finalPath, s.partSize);
       if (scan.sha256 === s.verifiedSha256 && scan.size === s.fileSize) {
-        ledger.markComplete(id, instanceId);
+        ledger.markComplete(id, token);
       } else {
-        ledger.markFailed(id, instanceId, 'published file does not match verified digest');
+        ledger.markFailed(id, token, 'published file does not match verified digest');
       }
       return send(res, 200, view(ledger.getSession(id)!));
     }
     if (!(await exists(staging))) {
-      ledger.markFailed(id, instanceId, 'staging file missing');
+      ledger.markFailed(id, token, 'staging file missing');
       throw new HttpError(500, 'staging file missing');
     }
 
@@ -155,23 +193,28 @@ export function createApp(cfg: Config): { server: Server; ledger: Ledger; instan
     const missing: number[] = [];
     for (let n = 1; n <= s.partCount; n++) if (!have.has(n)) missing.push(n);
     if (missing.length) {
-      ledger.reopenWithBadParts(id, instanceId, []);
+      ledger.reopenWithBadParts(id, token, []);
       throw new HttpError(409, 'parts missing', { missing });
     }
 
     const scan = await scanFile(staging, s.partSize);
     const bad = parts.filter((p) => scan.partCrcs[p.partNumber - 1] !== p.crc32).map((p) => p.partNumber);
     if (bad.length || scan.size !== s.fileSize) {
-      ledger.reopenWithBadParts(id, instanceId, bad);
+      ledger.reopenWithBadParts(id, token, bad);
       throw new HttpError(422, 'stored bytes do not match accepted parts', { badParts: bad });
     }
-    if (claimedSha256 && claimedSha256 !== scan.sha256) {
-      ledger.markFailed(id, instanceId, 'content differs from client digest (source file changed?)');
+    if (claimedSha256 !== scan.sha256) {
+      ledger.markFailed(id, token, 'content differs from client digest (source file changed?)');
       throw new HttpError(422, 'sha256 mismatch', { claimed: claimedSha256, actual: scan.sha256 });
     }
 
-    ledger.recordVerified(id, instanceId, scan.sha256, finalPath);
+    ledger.recordVerified(id, token, scan.sha256, finalPath);
     fault('before-publish');
+    // Residual hazard, deliberately documented rather than detected: the write fence (ledger
+    // registration renewed before every write) stops any write that starts after the claim, but a
+    // single write call that stalls longer than writeLeaseMs could still land after the scan. An
+    // mtime/size comparison around the scan was tried and rejected: on SMB, merely reading the file
+    // moves its mtime, so it reported healthy uploads as modified.
     try {
       await publish(staging, finalPath);
     } catch (err) {
@@ -179,12 +222,12 @@ export function createApp(cfg: Config): { server: Server; ledger: Ledger; instan
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT' || !(await exists(finalPath))) throw err;
     }
     fault('after-publish');
-    ledger.markComplete(id, instanceId);
+    ledger.markComplete(id, token);
     send(res, 200, view(ledger.getSession(id)!));
   }
 
   async function abort(id: string, res: ServerResponse) {
-    const s = ledger.abort(id);
+    const s = ledger.abort(id); // throws 409 while FINALIZING or COMPLETE
     await rm(stagingPath(cfg.dataDir, id), { force: true });
     send(res, 200, view(s));
   }
@@ -212,30 +255,36 @@ export function createApp(cfg: Config): { server: Server; ledger: Ledger; instan
     if (seg.length === 2 && m === 'GET') return getSession(id, res);
     if (seg.length === 2 && m === 'DELETE') return abort(id, res);
     if (seg.length === 3 && seg[2] === 'complete' && m === 'POST') return complete(id, req, res);
-    if (seg.length === 4 && seg[2] === 'parts' && m === 'PUT') return putPart(id, Number(seg[3]), req, res);
+    if (seg.length === 4 && seg[2] === 'parts' && m === 'PUT') return putPart(id, seg[3], req, res);
     throw new HttpError(404, 'not found');
   }
 
   const server = createServer((req, res) => {
     route(req, res).catch((err: unknown) => {
+      const code = (err as NodeJS.ErrnoException).code;
+      // A request destroyed before its body completed means the client went away; a fully read request is
+      // destroyed automatically by Node and must still get its error response.
+      if ((code && CLIENT_ABORT_CODES.has(code)) || (req.destroyed && !req.complete)) return res.destroy();
       const status = err instanceof HttpError || err instanceof LedgerError ? err.status : 500;
       const body = err instanceof HttpError ? err.body : undefined;
       if (status === 500) console.error(err);
       if (res.headersSent) return res.destroy();
-      // The request body may still be streaming; don't let it keep the socket busy.
-      res.setHeader('connection', 'close');
-      send(res, status, { error: (err as Error).message, detail: body });
+      // Discard whatever part of the request body is still arriving so the client reads our status
+      // instead of a connection reset; the connection stays usable.
+      if (!req.complete) req.resume();
+      // 500 bodies never echo internals (paths, SQL); details stay in the server log.
+      send(res, status, { error: status === 500 ? 'internal error' : (err as Error).message, detail: body });
     });
   });
   return { server, ledger, instanceId };
 }
 
-// Aborts UPLOADING sessions older than maxAgeMs and removes their staging files.
-export async function cleanupExpired(cfg: Config, ledger: Ledger, maxAgeMs: number, now = Date.now()): Promise<string[]> {
+// Aborts UPLOADING sessions idle for longer than maxIdleMs and removes their staging files. The
+// abort is conditional in the ledger, so a session that is finalizing or still receiving is spared.
+export async function cleanupExpired(cfg: Config, ledger: Ledger, maxIdleMs: number, now = Date.now()): Promise<string[]> {
   const aborted: string[] = [];
   for (const s of ledger.listSessions()) {
-    if (s.state === 'UPLOADING' && now - s.createdAt > maxAgeMs) {
-      ledger.abort(s.id);
+    if (s.state === 'UPLOADING' && ledger.abortIfStale(s.id, now - maxIdleMs, now)) {
       await rm(stagingPath(cfg.dataDir, s.id), { force: true });
       aborted.push(s.id);
     }
