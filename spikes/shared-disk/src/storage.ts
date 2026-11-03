@@ -30,8 +30,8 @@ export async function createStaging(dataDir: string, sessionId: string, size: nu
 
 export class LengthMismatch extends Error {}
 
-// Larger writes matter on network mounts: streaming the socket's small chunks straight into
-// createWriteStream measured ~8 s per 64 MiB part over SMB, versus ~1.3 s with coalesced writes.
+// Larger writes matter on network mounts: writing each ~64 KiB socket chunk separately (or via
+// createWriteStream) was intermittently slow over SMB (median 7.6 s per 64 MiB part vs 1.3 s coalesced); see docs/research/shared-disk-spike-report.md.
 const WRITE_BLOCK = 8 * 1024 * 1024;
 
 // Writes `body` into the staging file at `offset` in WRITE_BLOCK-sized writes, computing CRC32 on
