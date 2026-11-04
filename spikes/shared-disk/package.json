@@ -1,0 +1,13 @@
+{
+  "name": "shared-disk-spike",
+  "private": true,
+  "description": "Research spike: server-side chunk receive with offset writes to a (possibly network-mounted) shared disk. Not product code.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node src/server.ts",
+    "test": "node --test test/*.test.ts"
+  }
+}

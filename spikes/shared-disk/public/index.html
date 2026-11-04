@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shared-disk upload spike</title>
+  <style>
+    body { font: 14px/1.5 system-ui, sans-serif; max-width: 760px; margin: 24px auto; padding: 0 16px; }
+    fieldset { margin: 12px 0; }
+    progress { width: 100%; }
+    pre { background: #f4f4f4; padding: 8px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Shared-disk upload spike</h1>
+  <p>研究原型，不是产品。选文件后上传；中断（刷新页面或断网）后再选同一个文件会续传。</p>
+
+  <fieldset>
+    <legend>上传</legend>
+    <input type="file" id="file">
+    <label>并发 <input type="number" id="concurrency" value="4" min="1" max="16"></label>
+    <button id="start">上传 / 续传</button>
+    <button id="stop">停止</button>
+    <p>网络已发送（仅表示交给了网络层）</p>
+    <progress id="sent" value="0" max="1"></progress>
+    <p>服务端已确认的块</p>
+    <progress id="acked" value="0" max="1"></progress>
+    <p id="state">—</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>浏览器端测量（只读文件，不上传）</legend>
+    <button id="measure-crc">CRC32 吞吐（纯 JS）</button>
+    <button id="measure-sha">分块 SHA-256 吞吐（Web Crypto）</button>
+    <button id="measure-sha-js">整文件 SHA-256（纯 JS 增量）</button>
+  </fieldset>
+
+  <pre id="log"></pre>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

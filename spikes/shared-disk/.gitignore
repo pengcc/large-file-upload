@@ -1,0 +1,3 @@
+.spike-data/
+.spike-ledger.sqlite*
+.env*
