@@ -12,7 +12,7 @@ network: every number below is specific to this setup.
 
 ## 1. Scenario results
 
-25 automated scenarios pass both on local disk and with data on the NAS mount
+30 automated scenarios pass on local disk (25 of them were also run with data on the NAS mount before the second remediation round; the mount was gone when that round finished, so the final 30 were not re-run on the NAS)
 (`SPIKE_TEST_DATA_DIR=/Volumes/upload-test npm test`): byte-identical parallel upload, idempotent
 part retry, crash + resume sending only missing parts, rejected bad CRC / short body, post-accept
 corruption caught at completion (only that part re-sent), source changed (mtime differs: refused;
@@ -163,4 +163,30 @@ fence, the per-claim token and the abort rule one at a time).
   the NAS took 27.6 s (38.9 MB/s, concurrency 1) against 23 s before the fence was added: a single
   run, so no regression or improvement is claimed. The 10 GB NAS run in section 2 predates the
   remediation and was not repeated.
+
+### Second remediation round (re-review of head e58c5e6)
+
+The re-review met eight of the nine earlier findings and reported four more, all fixed:
+
+- **Errors raised while the body is streaming reset the connection** (reproduced: a 512 KiB body to a
+  64 KiB part gave `ECONNRESET` instead of 400). Cause: leaving a `for await` over the request
+  destroys the request stream, so the handler could no longer answer. The loop now iterates with
+  `destroyOnReturn: false`, and the handler drains the rest of the body and sends the status. The
+  earlier test passed only because its rejection happened before any body was read; the new tests
+  send a multi-chunk overlong body and a lease loss that happens mid-body.
+- **Lapsed write lease was non-retryable.** Both clients treated every 4xx as fatal; they now
+  re-send the part on `409 write lease lost` only. The automated test covers the retry decision, not
+  an end-to-end forced lease loss, and the browser retry path was only smoke-tested (a normal upload).
+- **Heartbeat was a fixed 10 s**, so a lease at or below 10 s starved a slow but live client. It is
+  now a third of the configured lease; a test with a 500 ms lease and a client sending for 2.4 s in
+  300 ms gaps passes only with that change.
+- **Old ledgers broke on the new column.** The ledger now migrates on open (column added, backfilled
+  from `created_at`); a test opens a pre-migration ledger.
+
+Each fix was checked by reverting it and confirming its test fails. One lesson from this round: the
+test written for the first reset finding passed without exercising the failing path, so a test for
+an error path has to reproduce the stage at which the error occurs (here: mid-body), not just the
+error. Known and documented gaps left in place: a session stuck FINALIZING after its finalizer died
+is recovered only by another `complete`, and a rejected request's remaining body is drained without
+a size cap.
 

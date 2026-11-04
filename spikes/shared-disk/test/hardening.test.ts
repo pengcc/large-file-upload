@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { request } from 'node:http';
 import { afterEach, beforeEach, describe, test } from 'node:test';
 import { createHash } from 'node:crypto';
-import { getSession, sha256File, uploadFile } from '../src/client.ts';
+import { ClientError, getSession, retryable, sha256File, uploadFile } from '../src/client.ts';
 import { loadConfig } from '../src/config.ts';
 import { Ledger } from '../src/ledger.ts';
 import { cleanupExpired } from '../src/server.ts';
@@ -11,6 +11,7 @@ import { stagingPath } from '../src/storage.ts';
 import { Sha256 } from '../public/sha256.js';
 import { completeRaw, crashedUpload, dropEnv, makeEnv, makeFile, PART, shasum, startServer, stopServer, type Env, type Running } from './helpers.ts';
 import { readdir } from 'node:fs/promises';
+import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 
 const SIZE = PART * 10 + 1234;
@@ -183,6 +184,121 @@ describe('browser SHA-256 implementation', () => {
       const h = new Sha256();
       h.update(new Uint8Array(await readFile(file)));
       assert.equal(h.hex(), await sha256File(file));
+    } finally {
+      await dropEnv(env);
+    }
+  });
+});
+
+// Sends `chunks` to a part endpoint with a pause before each, returning the response status or the
+// transport error code (a connection reset is what a client sees when the status never arrives).
+function putChunks(url: string, total: number, chunks: Buffer[], pauseMs: number[]): Promise<string> {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (value: string) => {
+      if (done) return;
+      done = true;
+      resolve(value);
+    };
+    const req = request(url, { method: 'PUT', headers: { 'content-length': String(total) } }, (res) => {
+      res.resume();
+      res.on('end', () => finish(String(res.statusCode)));
+    });
+    req.on('error', (err: NodeJS.ErrnoException) => finish(`error ${err.code ?? err.message}`));
+    // The server may close the connection once it has answered; later writes then fail harmlessly.
+    req.on('socket', (socket) => socket.on('error', () => {}));
+    (async () => {
+      for (let i = 0; i < chunks.length; i++) {
+        if (pauseMs[i]) await new Promise((r) => setTimeout(r, pauseMs[i]));
+        if (done || req.destroyed) return;
+        req.write(chunks[i]);
+      }
+      req.end();
+    })();
+  });
+}
+
+describe('errors raised while the body is still streaming, and lease handling for slow clients', () => {
+  let env: Env;
+  const running: Running[] = [];
+  const start = async (extra: Record<string, string> = {}) => {
+    const r = await startServer(env, extra);
+    running.push(r);
+    return r;
+  };
+  beforeEach(async () => {
+    env = await makeEnv('stream');
+  });
+  afterEach(async () => {
+    for (const r of running.splice(0)) await stopServer(r);
+    await dropEnv(env);
+  });
+
+  test('an overlong multi-chunk body gets its 400, not a connection reset', async () => {
+    const srv = await start();
+    const { id } = await (await createRaw(srv.url, 'o.bin', PART * 4)).json();
+    const chunks = Array.from({ length: 10 }, () => Buffer.alloc(PART)); // 640 KiB into a 64 KiB part
+    assert.equal(await putChunks(`${srv.url}/sessions/${id}/parts/1`, PART * 10, chunks, []), '400');
+    assert.deepEqual((await getSession(srv.url, id)).parts, []);
+  });
+
+  test('a lease lost while the body is still streaming gets its 409, not a connection reset', async () => {
+    const MiB16 = 16 * 1024 * 1024;
+    const srv = await start({ SPIKE_MIN_PART_SIZE: String(MiB16), SPIKE_WRITE_LEASE_MS: '500' });
+    const { id } = await (await createRaw(srv.url, 'l.bin', MiB16)).json();
+    const chunks = Array.from({ length: 16 }, () => Buffer.alloc(1024 * 1024));
+    // 1 MiB, then a pause longer than the lease; the first 8 MiB flush (renew) happens after it lapsed.
+    const result = await putChunks(`${srv.url}/sessions/${id}/parts/1`, MiB16, chunks, [0, 900]);
+    assert.equal(result, '409');
+    assert.deepEqual((await getSession(srv.url, id)).parts, []);
+  });
+
+  test('a slow but live client keeps its lease through the heartbeat (heartbeat follows the lease)', async () => {
+    const srv = await start({ SPIKE_WRITE_LEASE_MS: '500' });
+    const { id } = await (await createRaw(srv.url, 's.bin', PART)).json();
+    const piece = PART / 8;
+    const chunks = Array.from({ length: 8 }, () => Buffer.alloc(piece));
+    // 8 pieces 300 ms apart: 2.4 s total, far longer than the 500 ms lease, never idle for more than 300 ms.
+    const result = await putChunks(`${srv.url}/sessions/${id}/parts/1`, PART, chunks, Array(8).fill(300));
+    assert.equal(result, '200');
+    assert.deepEqual((await getSession(srv.url, id)).parts.map((p) => p.partNumber), [1]);
+  });
+
+  test('clients re-send a part on a lapsed write lease but not on other 409s', () => {
+    assert.equal(retryable(new ClientError(409, { error: 'write lease lost' })), true);
+    assert.equal(retryable(new ClientError(409, { error: 'session is ABORTED' })), false);
+    assert.equal(retryable(new ClientError(409, { error: 'file fingerprint changed' })), false);
+    assert.equal(retryable(new ClientError(400, { error: 'invalid part number' })), false);
+    assert.equal(retryable(new ClientError(500, { error: 'internal error' })), true);
+    assert.equal(retryable(new TypeError('fetch failed')), true);
+  });
+});
+
+describe('ledger schema migration', () => {
+  test('a ledger from before last_activity is migrated and usable', async () => {
+    const env = await makeEnv('migrate');
+    try {
+      const old = new DatabaseSync(env.ledger);
+      old.exec(`CREATE TABLE sessions (
+        id TEXT PRIMARY KEY, file_name TEXT NOT NULL, file_size INTEGER NOT NULL, part_size INTEGER NOT NULL,
+        part_count INTEGER NOT NULL, fingerprint TEXT NOT NULL, state TEXT NOT NULL, finalize_owner TEXT,
+        finalize_lease_until INTEGER, verified_sha256 TEXT, final_path TEXT, failure TEXT, created_at INTEGER NOT NULL);
+        CREATE TABLE parts (session_id TEXT NOT NULL, part_number INTEGER NOT NULL, size INTEGER NOT NULL, crc32 INTEGER NOT NULL, PRIMARY KEY (session_id, part_number));
+        CREATE TABLE writes_in_flight (writer_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, part_number INTEGER NOT NULL, expires_at INTEGER NOT NULL);
+        INSERT INTO sessions (id, file_name, file_size, part_size, part_count, fingerprint, state, created_at)
+        VALUES ('old', 'a.bin', 10, 10, 1, 'x', 'UPLOADING', 1234);`);
+      old.close();
+      const ledger = new Ledger(env.ledger);
+      try {
+        assert.equal(ledger.getSession('old')?.lastActivity, 1234, 'backfilled from created_at');
+        assert.equal(ledger.abortIfStale('old', 5000, Date.now()), true, 'migrated session ages out normally');
+        ledger.createSession({ id: 'new', fileName: 'b.bin', fileSize: 10, partSize: 10, partCount: 1, fingerprint: 'y', createdAt: 99 });
+        assert.equal(ledger.getSession('new')?.lastActivity, 99);
+      } finally {
+        ledger.close();
+      }
+      const again = new Ledger(env.ledger); // reopening an already migrated ledger is a no-op
+      again.close();
     } finally {
       await dropEnv(env);
     }

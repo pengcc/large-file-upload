@@ -117,6 +117,7 @@ export function createApp(cfg: Config): { server: Server; ledger: Ledger; instan
     if (!Number.isSafeInteger(n) || n < 1 || n > known.partCount) throw new HttpError(400, 'invalid part number');
     const writerId = randomUUID();
     const s = ledger.beginWrite(id, n, writerId, Date.now() + cfg.writeLeaseMs);
+    const heartbeatMs = Math.max(100, Math.floor(cfg.writeLeaseMs / 3));
     const renew = () => {
       if (!ledger.renewWrite(writerId, Date.now(), Date.now() + cfg.writeLeaseMs)) throw new HttpError(409, 'write lease lost');
     };
@@ -127,7 +128,7 @@ export function createApp(cfg: Config): { server: Server; ledger: Ledger; instan
       const declared = req.headers['x-part-crc32'];
       let written: { size: number; crc32: number };
       try {
-        written = await writePart(stagingPath(cfg.dataDir, id), (n - 1) * s.partSize, expected, req, renew);
+        written = await writePart(stagingPath(cfg.dataDir, id), (n - 1) * s.partSize, expected, req, renew, heartbeatMs);
       } catch (err) {
         if (err instanceof LengthMismatch) throw new HttpError(400, err.message);
         throw err;

@@ -41,7 +41,14 @@ function putPart(sessionId, n, blob, crc, fingerprint, onProgress, signal) {
     xhr.setRequestHeader('x-part-crc32', String(crc));
     xhr.setRequestHeader('x-file-fingerprint', fingerprint);
     xhr.upload.onprogress = (e) => onProgress(e.loaded);
-    xhr.onload = () => (xhr.status === 200 ? resolve() : reject(Object.assign(new Error(`part ${n}: ${xhr.status}`), { status: xhr.status })));
+    xhr.onload = () => {
+      if (xhr.status === 200) return resolve();
+      let serverError;
+      try {
+        serverError = JSON.parse(xhr.responseText).error;
+      } catch {}
+      reject(Object.assign(new Error(`part ${n}: ${xhr.status} ${serverError ?? ''}`), { status: xhr.status, serverError }));
+    };
     xhr.onerror = () => reject(new Error(`part ${n}: network error`));
     signal.addEventListener('abort', () => xhr.abort());
     xhr.onabort = () => reject(new Error('stopped'));
@@ -116,7 +123,9 @@ async function upload() {
             break;
           } catch (err) {
             inFlight.delete(n);
-            if (signal.aborted || attempt >= 5 || (err.status && err.status < 500)) throw err;
+            // 4xx is fatal, except a lapsed write lease: that part is simply re-sent.
+            const leaseLapsed = err.status === 409 && err.serverError === 'write lease lost';
+            if (signal.aborted || attempt >= 5 || (err.status && err.status < 500 && !leaseLapsed)) throw err;
             await sleep(Math.min(5000, 250 * 2 ** attempt));
           }
         }

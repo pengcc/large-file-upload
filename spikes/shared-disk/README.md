@@ -23,8 +23,12 @@ dependencies.
   writer whose registration lapsed or whose session was claimed is refused. Known limit: one write
   call stalling longer than `SPIKE_WRITE_LEASE_MS` (default 120 s) could still land late; instances
   sharing a ledger must have synchronized clocks. Abort is refused while FINALIZING.
-- The ledger schema changed during review remediation (`last_activity`); delete any older
-  `.spike-ledger.sqlite` before running.
+- A ledger created before `last_activity` existed is migrated on open (column added, backfilled
+  from `created_at`).
+- Known gap: a session left FINALIZING by a finalizer that died is recovered only when a client
+  calls complete again after the lease; `cleanup` sees only UPLOADING sessions, so such a session's
+  staging file stays until then. A request rejected by the server has its remaining body drained
+  without a size cap.
 - The ledger (SQLite, WAL) lives on local disk and is the source of truth. Several server
   processes can share it.
 

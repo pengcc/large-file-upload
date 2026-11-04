@@ -84,6 +84,18 @@ export class Ledger {
         expires_at INTEGER NOT NULL
       );
     `);
+    this.migrate();
+  }
+
+  // Ledgers created before `last_activity` existed: add the column and age those sessions from creation.
+  private migrate(): void {
+    const cols = (this.db.prepare('PRAGMA table_info(sessions)').all() as Row[]).map((c) => c.name);
+    if (!cols.includes('last_activity')) {
+      this.tx(() => {
+        this.db.exec('ALTER TABLE sessions ADD COLUMN last_activity INTEGER NOT NULL DEFAULT 0');
+        this.db.exec('UPDATE sessions SET last_activity = created_at');
+      });
+    }
   }
 
   close(): void {

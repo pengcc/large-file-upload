@@ -48,8 +48,9 @@ async function call(url: string, init: RequestInit = {}): Promise<Record<string,
   return body;
 }
 
-function retryable(err: unknown): boolean {
-  if (err instanceof ClientError) return err.status >= 500;
+export function retryable(err: unknown): boolean {
+  // A lapsed write lease is a per-part condition (idle past the lease, nobody finalizing): re-send the part.
+  if (err instanceof ClientError) return err.status >= 500 || (err.status === 409 && err.body.error === 'write lease lost');
   return err instanceof TypeError; // fetch network failure
 }
 
