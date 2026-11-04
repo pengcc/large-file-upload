@@ -12,7 +12,7 @@ network: every number below is specific to this setup.
 
 ## 1. Scenario results
 
-30 automated scenarios pass on local disk (25 of them were also run with data on the NAS mount before the second remediation round; the mount was gone when that round finished, so the final 30 were not re-run on the NAS)
+32 automated scenarios pass on local disk (25 of them were also run with data on the NAS mount before the second remediation round; the mount was gone when that round finished, so the final 32 were not re-run on the NAS)
 (`SPIKE_TEST_DATA_DIR=/Volumes/upload-test npm test`): byte-identical parallel upload, idempotent
 part retry, crash + resume sending only missing parts, rejected bad CRC / short body, post-accept
 corruption caught at completion (only that part re-sent), source changed (mtime differs: refused;
@@ -189,4 +189,25 @@ an error path has to reproduce the stage at which the error occurs (here: mid-bo
 error. Known and documented gaps left in place: a session stuck FINALIZING after its finalizer died
 is recovered only by another `complete`, and a rejected request's remaining body is drained without
 a size cap.
+
+### Third remediation round (re-review of head f37cff2)
+
+The second re-review met all four earlier findings and reported two small ones, both fixed:
+
+- **Migration check-then-act race.** The column check now runs inside the transaction that adds the
+  column. This one is only partly testable: the race window is tiny, so the test (12 processes
+  opening a pre-migration ledger at once, three rounds) caught the old ordering in 1 of 5 runs of a
+  deliberately reverted version. It demonstrates absence of failures, it does not prove the fix.
+- **No lower bound on the write lease.** Startup now rejects `SPIKE_WRITE_LEASE_MS` below 300 ms (the
+  heartbeat is a third of the lease with a 100 ms floor) and non-numeric values; documented in the README.
+
+Writing the concurrency test exposed a defect the reviewers had not reported: opening one ledger from
+several processes at the same moment could fail with `database is locked`. First cause:
+`busy_timeout` was set after the WAL switch (reordering fixed it in most runs, and reverting the order
+makes the test fail). Remaining cause, seen in 1 of 20 runs after the reorder: SQLite can return
+"locked" immediately for the journal-mode switch without waiting out `busy_timeout`, so ledger
+initialization (idempotent) is now retried for up to ~100 short attempts. After that, 40 of 40 stress
+runs passed. Lesson: a stress test written for one race surfaced a different, more likely start-up
+failure, and a single green run of such a test is not evidence (the second cause appeared only on
+repetition).
 

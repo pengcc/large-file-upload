@@ -13,15 +13,23 @@ export type Config = {
 
 const MiB = 1024 * 1024;
 
+// The write heartbeat is a third of the lease but never below 100 ms, so a lease under 300 ms would
+// leave live slow clients with almost no tolerated gap. Reject it instead of starving them.
+export const MIN_WRITE_LEASE_MS = 300;
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const dataDir = env.SPIKE_DATA_DIR ?? join(process.cwd(), '.spike-data');
+  const writeLeaseMs = Number(env.SPIKE_WRITE_LEASE_MS ?? 120_000);
+  if (!Number.isFinite(writeLeaseMs) || writeLeaseMs < MIN_WRITE_LEASE_MS) {
+    throw new Error(`SPIKE_WRITE_LEASE_MS must be a number >= ${MIN_WRITE_LEASE_MS} (got ${env.SPIKE_WRITE_LEASE_MS})`);
+  }
   return {
     port: Number(env.SPIKE_PORT ?? 8787),
     dataDir,
     ledgerPath: env.SPIKE_LEDGER ?? join(process.cwd(), '.spike-ledger.sqlite'),
     minPartSize: Number(env.SPIKE_MIN_PART_SIZE ?? 8 * MiB),
     maxParts: Number(env.SPIKE_MAX_PARTS ?? 10_000),
-    writeLeaseMs: Number(env.SPIKE_WRITE_LEASE_MS ?? 120_000),
+    writeLeaseMs,
     finalizeLeaseMs: Number(env.SPIKE_FINALIZE_LEASE_MS ?? 600_000),
     fault: env.SPIKE_FAULT || undefined,
   };

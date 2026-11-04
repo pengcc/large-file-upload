@@ -50,10 +50,25 @@ export class Ledger {
 
   constructor(path: string) {
     this.db = new DatabaseSync(path);
+    // Several server processes may open one ledger at the same moment. SQLite can answer "database is
+    // locked" immediately (without waiting out busy_timeout) for the journal-mode switch and for lock
+    // upgrades, so initialization, which is idempotent, is retried briefly instead of failing the start.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        this.init();
+        return;
+      } catch (err) {
+        if (attempt >= 100 || !/database is locked|SQLITE_BUSY/i.test(String((err as Error).message))) throw err;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25 + Math.floor(Math.random() * 75));
+      }
+    }
+  }
+
+  private init(): void {
     this.db.exec(`
+      PRAGMA busy_timeout = 10000;
       PRAGMA journal_mode = WAL;
       PRAGMA synchronous = FULL;
-      PRAGMA busy_timeout = 10000;
       CREATE TABLE IF NOT EXISTS sessions (
         id TEXT PRIMARY KEY,
         file_name TEXT NOT NULL,
@@ -88,14 +103,15 @@ export class Ledger {
   }
 
   // Ledgers created before `last_activity` existed: add the column and age those sessions from creation.
+  // The column check runs inside the same transaction as the ALTER, so two processes starting at once
+  // on an old ledger cannot both decide to add it (the loser would fail with "duplicate column name").
   private migrate(): void {
-    const cols = (this.db.prepare('PRAGMA table_info(sessions)').all() as Row[]).map((c) => c.name);
-    if (!cols.includes('last_activity')) {
-      this.tx(() => {
-        this.db.exec('ALTER TABLE sessions ADD COLUMN last_activity INTEGER NOT NULL DEFAULT 0');
-        this.db.exec('UPDATE sessions SET last_activity = created_at');
-      });
-    }
+    this.tx(() => {
+      const cols = (this.db.prepare('PRAGMA table_info(sessions)').all() as Row[]).map((c) => c.name);
+      if (cols.includes('last_activity')) return;
+      this.db.exec('ALTER TABLE sessions ADD COLUMN last_activity INTEGER NOT NULL DEFAULT 0');
+      this.db.exec('UPDATE sessions SET last_activity = created_at');
+    });
   }
 
   close(): void {

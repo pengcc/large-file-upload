@@ -4,7 +4,7 @@ import { request } from 'node:http';
 import { afterEach, beforeEach, describe, test } from 'node:test';
 import { createHash } from 'node:crypto';
 import { ClientError, getSession, retryable, sha256File, uploadFile } from '../src/client.ts';
-import { loadConfig } from '../src/config.ts';
+import { loadConfig, MIN_WRITE_LEASE_MS } from '../src/config.ts';
 import { Ledger } from '../src/ledger.ts';
 import { cleanupExpired } from '../src/server.ts';
 import { stagingPath } from '../src/storage.ts';
@@ -12,6 +12,8 @@ import { Sha256 } from '../public/sha256.js';
 import { completeRaw, crashedUpload, dropEnv, makeEnv, makeFile, PART, shasum, startServer, stopServer, type Env, type Running } from './helpers.ts';
 import { readdir } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 
 const SIZE = PART * 10 + 1234;
@@ -247,7 +249,7 @@ describe('errors raised while the body is still streaming, and lease handling fo
     const srv = await start({ SPIKE_MIN_PART_SIZE: String(MiB16), SPIKE_WRITE_LEASE_MS: '500' });
     const { id } = await (await createRaw(srv.url, 'l.bin', MiB16)).json();
     const chunks = Array.from({ length: 16 }, () => Buffer.alloc(1024 * 1024));
-    // 1 MiB, then a pause longer than the lease; the first 8 MiB flush (renew) happens after it lapsed.
+    // 1 MiB, then a pause longer than the lease: the heartbeat renewal on the next chunk finds it lapsed.
     const result = await putChunks(`${srv.url}/sessions/${id}/parts/1`, MiB16, chunks, [0, 900]);
     assert.equal(result, '409');
     assert.deepEqual((await getSession(srv.url, id)).parts, []);
@@ -301,6 +303,49 @@ describe('ledger schema migration', () => {
       again.close();
     } finally {
       await dropEnv(env);
+    }
+  });
+});
+
+describe('startup configuration and concurrent migration', () => {
+  test('a write lease below the minimum is rejected at startup', () => {
+    assert.throws(() => loadConfig({ SPIKE_WRITE_LEASE_MS: String(MIN_WRITE_LEASE_MS - 1) }), /SPIKE_WRITE_LEASE_MS/);
+    assert.throws(() => loadConfig({ SPIKE_WRITE_LEASE_MS: 'abc' }), /SPIKE_WRITE_LEASE_MS/);
+    assert.throws(() => loadConfig({ SPIKE_WRITE_LEASE_MS: '0' }), /SPIKE_WRITE_LEASE_MS/);
+    assert.equal(loadConfig({ SPIKE_WRITE_LEASE_MS: String(MIN_WRITE_LEASE_MS) }).writeLeaseMs, MIN_WRITE_LEASE_MS);
+    assert.equal(loadConfig({}).writeLeaseMs, 120_000);
+  });
+
+  // Probabilistic by nature: the window is the gap between the column check and the ALTER, so this
+  // can only demonstrate absence of failures over many simultaneous starts, not prove the fix.
+  test('many processes opening a pre-migration ledger at once all start', async () => {
+    const ledgerModule = fileURLToPath(new URL('../src/ledger.ts', import.meta.url));
+    for (let round = 0; round < 3; round++) {
+      const env = await makeEnv('migrace');
+      try {
+        const old = new DatabaseSync(env.ledger);
+        old.exec(`CREATE TABLE sessions (
+          id TEXT PRIMARY KEY, file_name TEXT NOT NULL, file_size INTEGER NOT NULL, part_size INTEGER NOT NULL,
+          part_count INTEGER NOT NULL, fingerprint TEXT NOT NULL, state TEXT NOT NULL, finalize_owner TEXT,
+          finalize_lease_until INTEGER, verified_sha256 TEXT, final_path TEXT, failure TEXT, created_at INTEGER NOT NULL);
+          CREATE TABLE parts (session_id TEXT NOT NULL, part_number INTEGER NOT NULL, size INTEGER NOT NULL, crc32 INTEGER NOT NULL, PRIMARY KEY (session_id, part_number));
+          CREATE TABLE writes_in_flight (writer_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, part_number INTEGER NOT NULL, expires_at INTEGER NOT NULL);`);
+        old.close();
+        const script = `const { Ledger } = await import(${JSON.stringify(ledgerModule)}); new Ledger(${JSON.stringify(env.ledger)}).close();`;
+        const exits = await Promise.all(
+          Array.from({ length: 12 }, () =>
+            new Promise<{ code: number | null; err: string }>((resolve) => {
+              const p = spawn(process.execPath, ['--no-warnings', '--input-type=module', '-e', script]);
+              let err = '';
+              p.stderr.on('data', (d) => (err += d));
+              p.on('exit', (code) => resolve({ code, err }));
+            }),
+          ),
+        );
+        for (const e of exits) assert.equal(e.code, 0, e.err.split('\n').find((l) => l.includes('Error')) ?? e.err);
+      } finally {
+        await dropEnv(env);
+      }
     }
   });
 });

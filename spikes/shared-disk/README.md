@@ -22,7 +22,9 @@ dependencies.
   every disk write and its fsync; a finalizer cannot claim while a registration is live, and a
   writer whose registration lapsed or whose session was claimed is refused. Known limit: one write
   call stalling longer than `SPIKE_WRITE_LEASE_MS` (default 120 s) could still land late; instances
-  sharing a ledger must have synchronized clocks. Abort is refused while FINALIZING.
+  sharing a ledger must have synchronized clocks. `SPIKE_WRITE_LEASE_MS` must be at least 300 ms
+  (startup fails otherwise): the heartbeat is a third of the lease with a 100 ms floor. Abort is
+  refused while FINALIZING.
 - A ledger created before `last_activity` existed is migrated on open (column added, backfilled
   from `created_at`).
 - Known gap: a session left FINALIZING by a finalizer that died is recovered only when a client
